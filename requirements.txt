@@ -1,0 +1,9 @@
+pyspark==3.5.1
+streamlit
+uvicorn[standard]
+fastapi
+psycopg2-binary
+pandas
+requests
+scikit-learn
+airflow==3.1.4
