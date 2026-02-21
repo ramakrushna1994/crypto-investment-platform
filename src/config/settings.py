@@ -23,7 +23,7 @@ POSTGRES = PostgresConfig()
 @dataclass(frozen=True)
 class BinanceConfig:
     base_url: str = "https://api.binance.com/api/v3/klines"
-    symbol: str = "BTCUSDT"
+    symbols: tuple = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT", "XRPUSDT")
     interval: str = "1d"
     limit: int = 30
 

@@ -1,1 +1,4 @@
 /.cursor
+logs/
+__pycache__/
+*.pyc

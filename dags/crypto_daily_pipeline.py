@@ -16,7 +16,7 @@ default_args = {
 with DAG(
     dag_id="crypto_daily_pipeline",
     start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
-    schedule="@daily",
+    schedule="@hourly",
     catchup=False,
     default_args=default_args,
     tags=["crypto", "etl"],

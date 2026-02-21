@@ -25,24 +25,26 @@ def ingest_binance_data():
             )
         """)
 
-        response = requests.get(
-            BINANCE.base_url,
-            params={
-                "symbol": BINANCE.symbol,
-                "interval": BINANCE.interval,
-                "limit": BINANCE.limit
-            }
-        )
-        response.raise_for_status()
-        data = response.json()
-        logger.info("Fetched data from Binance API", extra={"records": len(data)})
+        for symbol in BINANCE.symbols:
+            logger.info(f"Fetching data for {symbol}")
+            response = requests.get(
+                BINANCE.base_url,
+                params={
+                    "symbol": symbol,
+                    "interval": BINANCE.interval,
+                    "limit": BINANCE.limit
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            logger.info("Fetched data from Binance API", extra={"records": len(data), "symbol": symbol})
 
-        for r in data:
-            cur.execute("""
-                INSERT INTO crypto_price_raw VALUES (%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT DO NOTHING
-            """, (
-                BINANCE.symbol,
+            for r in data:
+                cur.execute("""
+                    INSERT INTO crypto_price_raw VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT DO NOTHING
+                """, (
+                    symbol,
                 float(r[1]), float(r[2]), float(r[3]),
                 float(r[4]), float(r[5]),
                 datetime.fromtimestamp(r[0] / 1000)
