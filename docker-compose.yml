@@ -1,5 +1,3 @@
-version: "3.9"
-
 x-airflow-common: &airflow-common
   build: .
   image: crypto-airflow:3.1.4
@@ -7,14 +5,17 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://crypto:crypto@postgres:5432/crypto
-    AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.simple
+    AIRFLOW__API__AUTH_BACKENDS: airflow.providers.fab.auth_manager.api.auth.backend.basic_auth
+    AIRFLOW__API__SECRET_KEY: "local-dev-secret-key"
     AIRFLOW__WEBSERVER__SECRET_KEY: "local-dev-secret-key"
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__LOGGING__BASE_LOG_FOLDER: /opt/airflow/logs
     AIRFLOW__LOGGING__REMOTE_LOGGING: "false"
     AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT: 8793
     PYTHONPATH: /opt/airflow
     PIP_REQUIREMENTS: /requirements.txt
-    _PIP_ADDITIONAL_REQUIREMENTS: "pyspark==3.5.1 scikit-learn requests"
+    TZ: Asia/Kolkata
+    #_PIP_ADDITIONAL_REQUIREMENTS: "pyspark==3.5.1 scikit-learn requests apache-airflow-providers-fab"
 
   volumes:
     - ./dags:/opt/airflow/dags
@@ -33,6 +34,7 @@ services:
       POSTGRES_USER: crypto
       POSTGRES_PASSWORD: crypto
       POSTGRES_DB: crypto
+      TZ: Asia/Kolkata
     ports:
       - "5432:5432"
     volumes:
@@ -42,7 +44,7 @@ services:
     <<: *airflow-common
     entrypoint: /bin/bash
     command: >
-      -c "airflow db migrate"
+      -c "airflow db migrate && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true"
     restart: "no"
 
   # airflow-scheduler:
@@ -57,12 +59,7 @@ services:
   airflow-api-server:
     <<: *airflow-common
     command: >
-      bash -c "
-      airflow db migrate &&
-      airflow scheduler &
-      airflow serve-logs &
-      airflow api-server
-      "
+      bash -c " airflow db migrate && airflow scheduler & airflow serve-logs & airflow api-server "
     ports:
       - "8080:8080"
       - "4040:4040"
@@ -76,8 +73,7 @@ services:
     command: dag-processor
     depends_on:
       - airflow-api-server
-  
-  
+
   streamlit:
     build:
       context: .
@@ -91,6 +87,8 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
 
   api:
     build:
@@ -105,6 +103,33 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+    environment:
+      TZ: Asia/Kolkata
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: ollama-init
+    depends_on:
+      - ollama
+    command: >
+      sh -c "
+        echo 'Waiting for Ollama to start...' &&
+        while ! curl -s http://ollama:11434/api/tags >/dev/null; do sleep 2; done &&
+        echo 'Pulling llama3.2 model...' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3.2\"}' &&
+        echo 'Model pulled successfully!'
+      "
+    restart: "no"
 
 volumes:
   postgres-db-volume:
+  ollama_data:

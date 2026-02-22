@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV PYTHONPATH=/app:$PYTHONPATH
 
-RUN pip install --no-cache-dir streamlit psycopg2-binary pandas requests
+RUN pip install --no-cache-dir streamlit psycopg2-binary pandas requests sqlalchemy
 
 COPY streamlit_app /app/streamlit_app
 COPY src /app/src

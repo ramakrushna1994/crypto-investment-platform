@@ -25,6 +25,6 @@ class BinanceConfig:
     base_url: str = "https://api.binance.com/api/v3/klines"
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT", "XRPUSDT")
     interval: str = "1d"
-    limit: int = 30
+    limit: int = 1000
 
 BINANCE = BinanceConfig()
