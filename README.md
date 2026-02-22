@@ -95,50 +95,15 @@ graph TD
 The platform uses PostgreSQL to store time-series data, technical indicators, and machine learning predictions. All 5 asset classes (`crypto`, `nifty50`, `nifty_midcap`, `nifty_smallcap`, `mutual_funds`) share the identical Tri-Table architectural pattern shown below:
 
 ```mermaid
-ERDiagram
-    %% Represents [asset]_price_raw
-    PRICE_RAW {
-        VARCHAR(50) symbol PK
-        TIMESTAMP event_time PK
-        NUMERIC open
-        NUMERIC high
-        NUMERIC low
-        NUMERIC close
-        NUMERIC volume
-    }
+graph LR
+    classDef tables fill:#2b2b2b,stroke:#555,stroke-width:2px,color:#fff;
     
-    %% Represents [asset]_features_daily
-    FEATURES_DAILY {
-        VARCHAR(50) symbol PK
-        TIMESTAMP event_time PK
-        NUMERIC close
-        NUMERIC moving_avg_7d
-        NUMERIC volatility_7d
-        NUMERIC macd
-        NUMERIC macd_signal
-        NUMERIC ema_20
-        NUMERIC bb_upper
-        NUMERIC bb_lower
-        NUMERIC sma_50
-        NUMERIC sma_200
-        NUMERIC atr_14
-        NUMERIC stoch_k
-        NUMERIC stoch_d
-        NUMERIC rsi_14
-    }
-    
-    %% Represents [asset]_investment_signals
-    INVESTMENT_SIGNALS {
-        VARCHAR(50) symbol PK
-        TIMESTAMP signal_date PK
-        VARCHAR(10) horizon PK "1y, 3y, 5y"
-        VARCHAR(10) signal "BUY, SELL, HOLD"
-        NUMERIC confidence
-        NUMERIC current_price
-    }
+    A["<b>PRICE_RAW</b><br>symbol (PK)<br>event_time (PK)<br>open<br>high<br>low<br>close<br>volume"]:::tables
+    B["<b>FEATURES_DAILY</b><br>symbol (PK)<br>event_time (PK)<br>close<br>moving_avg_7d<br>volatility_7d<br>macd... (+12 more)"]:::tables
+    C["<b>INVESTMENT_SIGNALS</b><br>symbol (PK)<br>signal_date (PK)<br>horizon (PK)<br>signal<br>confidence<br>current_price"]:::tables
 
-    PRICE_RAW ||--o{ FEATURES_DAILY : "ETL Transformation"
-    FEATURES_DAILY ||--|{ INVESTMENT_SIGNALS : "ML Inference"
+    A -->|"PySpark ETL"| B
+    B -->|"RandomForest ML"| C
 ```
 
 ## Local Setup
