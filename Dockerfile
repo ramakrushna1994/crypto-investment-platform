@@ -13,18 +13,8 @@ RUN mkdir -p /opt/airflow/logs/spark && chown -R 50000:50000 /opt/airflow/logs/s
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH=$JAVA_HOME/bin:/home/airflow/.local/bin:$PATH
 
-USER root
-
-
+USER airflow
 COPY requirements.txt /tmp/requirements.txt
-
-RUN /usr/python/bin/python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    /usr/python/bin/python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
-    /usr/python/bin/python -m pip check || true
-
-RUN find /home/airflow/.local/bin -type f -exec sed -i '1s|^#!.*|#!/usr/bin/env python3|' {} \; || true \
-    && chmod -R a+rx /home/airflow/.local/bin || true \
-    && chown -R 50000:0 /home/airflow/.local || true \
-    && rm /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 USER airflow
