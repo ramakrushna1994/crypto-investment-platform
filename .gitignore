@@ -1,1 +1,23 @@
 /.cursor
+
+# Logs and Execution History
+logs/
+*.log
+spark-events/
+
+# Environments
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and ML Checkpoints
+models/
+*.pkl
+*.joblib
+
+# IDEs
+.vscode/
+.idea/
