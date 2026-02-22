@@ -110,7 +110,12 @@ graph LR
 
 You'll need roughly 8GB of RAM available (16GB recommended if you plan on running the local LLM).
 
-1. Clone and spin up the environment:
+1. **Configure Passwords:** By default, the `docker-compose.yml` uses the credentials `crypto`/`crypto` for the PostgreSQL database. If you wish to secure your local deployment:
+   - Create a `.env` file in the root directory.
+   - Add your custom credentials (e.g., `POSTGRES_PASSWORD=your_secure_password`).
+   - Update the `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` string in `docker-compose.yml` to match your new password.
+
+2. **Clone and spin up the environment:**
 ```bash
 git clone https://github.com/ramakrushna1994/crypto-investment-platform.git
 cd crypto-investment-platform
