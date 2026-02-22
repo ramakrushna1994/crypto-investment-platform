@@ -1,3 +1,10 @@
+"""
+train_model.py
+
+Trains a Random Forest Classifier to predict mid-to-long term 
+price growth probabilities based on daily technical features. 
+Supports 1-year and 5-year investment horizons.
+"""
 import sys
 import os
 import pandas as pd
@@ -5,7 +12,6 @@ import numpy as np
 import logging
 from sqlalchemy import create_engine
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
 from src.config.settings import POSTGRES
@@ -37,7 +43,7 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
         raise ValueError(f"Invalid horizon '{horizon}'. Choose from: {list(INVESTOR_HORIZONS.keys())}")
 
     days_forward, gain_threshold, description = INVESTOR_HORIZONS[horizon]
-    logger.info(f"=== Training [{horizon.upper()}] model on {source_table} | Target: {description} ===")
+    logger.info(f"Training {horizon.upper()} model on {source_table}")
 
     try:
         engine = get_engine()
@@ -58,7 +64,7 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
         # Convert symbol to category to save memory
         df['symbol'] = df['symbol'].astype('category')
 
-        # --- Forward-looking investor label (Must do BEFORE downsampling) ---
+        # Calculate forward-looking labels prior to downsampling to preserve time series
         logger.info(f"Computing {horizon} forward labels...")
         df['future_close'] = df.groupby('symbol')['close'].shift(-days_forward)
         df['target'] = (df['future_close'] > df['close'] * gain_threshold).astype(int)
@@ -120,7 +126,7 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
         clean_name = source_table.replace("public.", "")
         model_path = f"/opt/airflow/models/{clean_name}_rf_{horizon}_model.joblib"
         joblib.dump(model, model_path)
-        logger.info(f"✅ [{horizon}] Saved -> {model_path}")
+        logger.info(f"Model saved successfully: {model_path}")
 
     except Exception as e:
         logger.exception(f"Training failed for {source_table} [{horizon}]: {e}")

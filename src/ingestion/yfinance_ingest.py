@@ -1,3 +1,9 @@
+"""
+yfinance_ingest.py
+
+Fetches historical daily OHLCV data for Indian Equity indices 
+(Nifty 50, Midcap, Smallcap) and specific Mutual Funds via the yfinance library.
+"""
 import pandas as pd
 import yfinance as yf
 import psycopg2
@@ -10,7 +16,7 @@ from src.config.settings import POSTGRES
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# List of top Nifty 50 symbols
+# Core indices to track
 NIFTY_50_SYMBOLS = [
     "ADANIENT.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "AXISBANK.NS",
     "BAJAJ-AUTO.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "BPCL.NS", "BHARTIARTL.NS",
@@ -36,38 +42,6 @@ NIFTY_SMALLCAP_SYMBOLS = [
     "CAMPUS.NS", "CHALET.NS", "CYIENT.NS", "RADICO.NS", "SONACOMS.NS",
     "APARINDS.NS", "CEATLTD.NS", "GLENMARK.NS", "IRB.NS", "JYOTHYLAB.NS",
     "MULTIBASE.NS", "PVRINOX.NS", "RITES.NS", "TATAINVEST.NS", "UTIAMC.NS"
-]
-
-MUTUAL_FUNDS_SYMBOLS = [
-    # Top Flexi-Cap & Multi-Cap Funds
-    "0P0001AMBE.BO", # Parag Parikh Flexi Cap Fund
-    "0P0000XVWG.BO", # Kotak Flexicap Fund
-    "0P0000XVIK.BO", # UTI Flexi Cap Fund
-    "0P00005W1U.BO", # Quant Active Fund
-    
-    # Top Small Cap Funds
-    "0P0000XW8F.BO", # SBI Small Cap Fund
-    "0P0000XVUA.BO", # Nippon India Small Cap Fund
-    "0P0000Y1G4.BO", # Quant Small Cap Fund
-    "0P0000XVYW.BO", # HDFC Small Cap Fund
-    
-    # Top Mid Cap Funds
-    "0P0000XVYQ.BO", # HDFC Mid-Cap Opportunities
-    "0P000122R2.BO", # Motilal Oswal Midcap Fund
-    "0P0000XVMI.BO", # DSP Midcap Fund
-    "0P0000XVQD.BO", # Franklin India Prima Fund
-    
-    # Top Large Cap / Bluechip Funds
-    "0P0000XW01.BO", # ICICI Prudential Bluechip
-    "0P0000XW8D.BO", # SBI Bluechip Fund
-    "0P0000XVRR.BO", # Mirae Asset Large Cap Fund
-    "0P0000XW5F.BO", # Axis Bluechip Fund
-    "0P0000YX2Z.BO", # Canara Robeco Bluechip Equity
-    
-    # Value / Thematic Funds
-    "0P0000XW14.BO", # ICICI Prudential Value Discovery
-    "0P0000XVV8.BO", # Invesco India Contra Fund
-    "0P0001AASZ.BO", # Tata Digital India Fund
 ]
 
 def get_db_connection():
@@ -104,10 +78,14 @@ def ensure_table_exists(table_name):
         raise
 
 def ingest_index(symbols, table_name, start_date=None):
+    """
+    Fetches historical data for a list of symbols and upserts them into PostgreSQL.
+    Supports incremental fetching by querying the latest date in the target table.
+    """
     ensure_table_exists(table_name)
     all_records = []
     
-    # 1. Fetch the latest date we have in our Postgres table for incremental loading
+    # Pre-fetch the latest date for incremental loading
     latest_dates = {}
     try:
         with get_db_connection() as conn:
@@ -129,11 +107,10 @@ def ingest_index(symbols, table_name, start_date=None):
             last_date_in_db = latest_dates.get(symbol)
             
             if last_date_in_db:
-                # Data mart incremental logic: Only pull from the max date we already have
                 fetch_start = last_date_in_db.strftime('%Y-%m-%d')
-                logger.info(f"Table contains data for {symbol}. Incremental fetch from {fetch_start}...")
+                logger.info(f"Existing data found for {symbol}. Incremental fetch from {fetch_start}...")
             else:
-                logger.info(f"Empty table for {symbol}. Full historical backfill from {fetch_start}...")
+                logger.info(f"No existing data for {symbol}. Full historical backfill from {fetch_start}...")
             
             if fetch_start:
                 hist = ticker.history(start=fetch_start)
@@ -152,7 +129,7 @@ def ingest_index(symbols, table_name, start_date=None):
                     float(row['Volume'])
                 ))
                 
-            # To reduce load on the API and avoid IP bans, pause between ticker fetches
+            # Rate limit mitigation for Yahoo Finance
             time.sleep(2)
         except Exception as e:
             logger.error(f"Failed fetching {symbol}: {e}")
@@ -186,17 +163,11 @@ def ingest_nifty_midcap():
 def ingest_nifty_smallcap():
     ingest_index(NIFTY_SMALLCAP_SYMBOLS, "nifty_smallcap_price_raw", start_date="2016-01-01")
 
-def ingest_mutual_funds():
-    # Write historical NAVs to the raw Postgres table. Backfill from 2016 as requested by the user.
-    ingest_index(MUTUAL_FUNDS_SYMBOLS, "mutual_funds_price_raw", start_date="2016-01-01")
-
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "midcap":
         ingest_nifty_midcap()
     elif len(sys.argv) > 1 and sys.argv[1] == "smallcap":
         ingest_nifty_smallcap()
-    elif len(sys.argv) > 1 and sys.argv[1] == "mutualfunds":
-        ingest_mutual_funds()
     else:
         ingest_nifty50()

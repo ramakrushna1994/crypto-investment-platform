@@ -1,9 +1,10 @@
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.operators.bash import BashOperator
 import pendulum
 
 from src.ingestion.binance_ingest import ingest_binance_data
-from src.etl.spark_etl import run_spark_etl
+from src.etl.pyspark_etl import run_spark_etl
 from src.recommendation.strategy_engine import generate_signals
 from src.recommendation.train_model import train_all_horizons
 

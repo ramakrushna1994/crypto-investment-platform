@@ -1,14 +1,21 @@
+"""
+binance_ingest.py
+
+Fetches historical daily OHLCV klines for configured cryptocurrency pairs
+from the public Binance API and stores them in PostgreSQL.
+"""
 import requests
 import psycopg2
 from datetime import datetime
 from src.config.settings import POSTGRES, BINANCE
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 def ingest_binance_data():
     try:
-        logger.info("🚀 Starting Binance ingestion task")
+        logger.info("Starting Binance ingestion task")
         conn = psycopg2.connect(POSTGRES.dsn)
         cur = conn.cursor()
 
@@ -52,10 +59,10 @@ def ingest_binance_data():
 
         conn.commit()
         conn.close()
-        logger.info("✅ Binance ingestion completed successfully")
+        logger.info("Binance ingestion completed successfully")
 
     except Exception as e:
-        logger.exception("❌ Binance ingestion failed")
+        logger.exception("Binance ingestion failed")
         raise
 
 

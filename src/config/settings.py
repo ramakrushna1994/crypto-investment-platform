@@ -1,3 +1,7 @@
+"""
+Core configuration settings for the investment platform.
+Handles environment variables and connection strings for databases and external APIs.
+"""
 import os
 from dataclasses import dataclass
 
@@ -20,8 +24,11 @@ class PostgresConfig:
 
 POSTGRES = PostgresConfig()
 
+POSTGRES = PostgresConfig()
+
 @dataclass(frozen=True)
 class BinanceConfig:
+    """Configuration for historical crypto data fetching via Binance API."""
     base_url: str = "https://api.binance.com/api/v3/klines"
     symbols: tuple = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT", "XRPUSDT")
     interval: str = "1d"

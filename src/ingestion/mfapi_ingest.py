@@ -1,13 +1,8 @@
 """
-MFAPI.in Ingestion — All Indian Mutual Funds from Top AMCs
-===========================================================
-Dynamically discovers and ingests ALL Direct Growth funds from the 20 largest
-AMCs by AUM in India. Uses the free MFAPI.in REST API (backed by AMFI data).
-No API key required. Covers 200+ funds from inception date.
+mfapi_ingest.py
 
-API:
-  GET https://api.mfapi.in/mf          → full catalogue (37,000+ schemes)
-  GET https://api.mfapi.in/mf/{code}   → NAV history for a scheme
+Dynamically discovers and ingests All Direct Growth mutual funds from the 20 
+largest AMCs in India using the public MFAPI.in REST API.
 """
 import requests
 import psycopg2
@@ -20,10 +15,7 @@ from src.config.settings import POSTGRES
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Top AMCs in India by AUM (as of 2025). We match scheme names against these
-# keywords to auto-discover all their funds from the MFAPI catalogue.
-# ──────────────────────────────────────────────────────────────────────────────
+# Top AMCs in India by AUM (as of 2025). Used to filter the MFAPI catalogue.
 TOP_AMC_KEYWORDS = [
     "SBI",
     "ICICI Prudential",
@@ -115,7 +107,7 @@ def fetch_nav_history(scheme_code: int, fund_name: str) -> list[dict]:
                 continue
         return records
     except Exception as e:
-        logger.warning(f"  ✗ {fund_name} ({scheme_code}): {e}")
+        logger.warning(f"Failed to fetch {fund_name} ({scheme_code}): {e}")
         return []
 
 def ingest_mutual_funds(max_workers: int = 20):
@@ -153,7 +145,7 @@ def ingest_mutual_funds(max_workers: int = 20):
     """)
     latest_dates = {row[0]: row[1] for row in cur.fetchall()}
 
-    # ── PHASE 1: Parallel HTTP fetch ───────────────────────────────────────────
+    # Fetch NAV data in parallel
     logger.info(f"Fetching NAV data with {max_workers} parallel workers...")
 
     def fetch_fund(scheme):
@@ -179,7 +171,7 @@ def ingest_mutual_funds(max_workers: int = 20):
 
     logger.info(f"  All fetches done. {len(all_results)} funds had new data.")
 
-    # ── PHASE 2: Sequential DB write (single connection, batched) ─────────────
+    # Sequential, batched database writes
     total_new = 0
     for records in all_results:
         rows = [(
@@ -198,7 +190,7 @@ def ingest_mutual_funds(max_workers: int = 20):
     conn.commit()
     cur.close()
     conn.close()
-    logger.info(f"✅ Done. Inserted {total_new:,} new NAV records from {len(all_results)} funds.")
+    logger.info(f"Completed ingestion. Inserted {total_new:,} new NAV records from {len(all_results)} funds.")
 
 
 

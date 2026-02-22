@@ -1,6 +1,8 @@
 """
 postgres.py
-bulk writes to postgres using COPY.
+
+Database utility module for bulk-writing Pandas DataFrames 
+to PostgreSQL utilizing the efficient `COPY` protocol.
 """
 from src.config.settings import POSTGRES
 from sqlalchemy import create_engine
@@ -15,7 +17,7 @@ _engine = None
 
 
 def get_engine():
-    """Returns a reusable sqlalchemy engine."""
+    """Returns a configurable, connection-pooled SQLAlchemy engine."""
     global _engine
     if _engine is None:
         _engine = create_engine(
@@ -70,7 +72,7 @@ def write_features_df(df: pd.DataFrame, table: str):
         )
 
         conn.commit()
-        logger.info(f"wrote {len(df)} rows to {full_table}")
+        logger.info(f"Successfully copied {len(df)} rows to {full_table}")
 
     except Exception as e:
         conn.rollback()

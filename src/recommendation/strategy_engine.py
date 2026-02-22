@@ -1,3 +1,9 @@
+"""
+strategy_engine.py
+
+Uses trained Random Forest models to inference the latest features for each 
+asset and generate clear "BUY/SELL/HOLD" signals with probability confidence scores.
+"""
 import sys
 import os
 import psycopg2
@@ -52,7 +58,8 @@ def _safe_predict_proba(model, X):
     return probs[:, 1]
 
 def generate_signals(source_table="public.mutual_funds_features_daily", dest_table="public.mutual_funds_investment_signals"):
-    logger.info(f"AI Investor Signal Engine: {source_table} -> {dest_table}")
+    """Fetch latest features, run inference models, and update signals table."""
+    logger.info(f"Generating signals: {source_table} -> {dest_table}")
 
     clean_name = source_table.replace("public.", "")
 
@@ -138,7 +145,7 @@ def generate_signals(source_table="public.mutual_funds_features_daily", dest_tab
 
         conn.commit()
         cur.close()
-        logger.info(f"✅ Inserted {len(df)} investor signals into {dest_table}")
+        logger.info(f"Inserted {len(df)} signals into {dest_table}")
 
     except Exception:
         logger.exception("Investor signal engine failed")
