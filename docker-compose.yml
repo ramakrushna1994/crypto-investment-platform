@@ -1,6 +1,7 @@
 x-airflow-common: &airflow-common
   build: .
   image: crypto-airflow:3.1.4
+  env_file: .env
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -23,6 +24,7 @@ x-airflow-common: &airflow-common
     - ./src:/opt/airflow/src
     - ./requirements.txt:/requirements.txt
     - ./jars:/opt/airflow/jars
+    - ./files:/opt/airflow/files
 
   depends_on:
     - postgres

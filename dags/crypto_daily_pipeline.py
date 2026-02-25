@@ -1,12 +1,14 @@
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 import pendulum
 
 from src.ingestion.binance_ingest import ingest_binance_data
 from src.etl.pyspark_etl import run_spark_etl
 from src.recommendation.strategy_engine import generate_signals
 from src.recommendation.train_model import train_all_horizons
+from src.recommendation.email_alert import send_opportunity_email
 
 default_args = {
     "owner": "airflow",
@@ -20,7 +22,7 @@ from src.ingestion.mfapi_ingest import ingest_mutual_funds
 with DAG(
     dag_id="crypto_daily_pipeline",
     start_date=pendulum.datetime(2025, 1, 1, tz="UTC"),
-    schedule="30 2,14 * * 1-6",  # 8:00 AM & 8:00 PM IST (Mon–Sat only, markets closed Sunday)
+    #schedule="30 2,14 * * 1-6",  # 8:00 AM & 8:00 PM IST (Mon–Sat only, markets closed Sunday)
     catchup=False,
     default_args=default_args,
     tags=["crypto", "stocks", "etl", "ml"],
@@ -131,9 +133,26 @@ with DAG(
         op_kwargs={"source_table": "public.mutual_funds_features_daily", "dest_table": "public.mutual_funds_investment_signals"}
     )
 
-    # Orchestration: ingest >> etl >> train >> signals (all 5 pipelines in parallel)
-    ingest_crypto   >> etl_crypto   >> train_crypto   >> signal_crypto
-    ingest_stocks   >> etl_stocks   >> train_stocks   >> signal_stocks
-    ingest_midcap   >> etl_midcap   >> train_midcap   >> signal_midcap
-    ingest_smallcap >> etl_smallcap >> train_smallcap >> signal_smallcap
-    ingest_mf       >> etl_mf       >> train_mf       >> signal_mf
+    # --- EMAIL ALERT PIPELINE ---
+    send_email = PythonOperator(
+        task_id="send_opportunity_email",
+        python_callable=send_opportunity_email,
+    )
+
+    # Orchestration: Run lightweight pipelines (crypto & Nifty 50) in parallel.
+    # Because we expanded the symbol lists, Midcap (150) and Smallcap (250) and Mutual Funds (thousands) 
+    # generate substantial data volumes, so we must run them sequentially to avoid OOM.
+    
+    start_parallel = EmptyOperator(task_id="start_parallel")
+    end_parallel = EmptyOperator(task_id="wait_for_parallel")
+
+    start_parallel >> ingest_crypto >> etl_crypto >> train_crypto >> signal_crypto >> end_parallel
+    start_parallel >> ingest_stocks >> etl_stocks >> train_stocks >> signal_stocks >> end_parallel
+
+    (
+        end_parallel
+        >> ingest_midcap >> etl_midcap >> train_midcap >> signal_midcap
+        >> ingest_smallcap >> etl_smallcap >> train_smallcap >> signal_smallcap
+        >> ingest_mf >> etl_mf >> train_mf >> signal_mf
+        >> send_email
+    )

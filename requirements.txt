@@ -8,3 +8,4 @@ requests
 scikit-learn
 apache-airflow-providers-fab
 yfinance
+openpyxl

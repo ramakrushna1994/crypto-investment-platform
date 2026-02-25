@@ -47,37 +47,41 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
 
     try:
         engine = get_engine()
-        # Only load columns we actually use to save memory
-        cols_to_fetch = ["symbol", "event_time", "close"] + FEATURES
-        query = f"SELECT {', '.join(cols_to_fetch)} FROM {source_table} ORDER BY symbol, event_time ASC"
         
-        logger.info(f"Fetching {len(cols_to_fetch)} columns for training...")
+        # Construct feature selection dynamically
+        feature_cols = ', '.join(FEATURES)
+        where_clauses = ["future_close IS NOT NULL"]
+        for f in FEATURES:
+            where_clauses.append(f"{f} IS NOT NULL")
+        query_where = " AND ".join(where_clauses)
+        
+        # Use CTE to calculate labels in SQL to prevent OOM
+        query = f"""
+            WITH labeled AS (
+                SELECT 
+                    symbol, 
+                    event_time, 
+                    close,
+                    LEAD(close, {days_forward}) OVER (PARTITION BY symbol ORDER BY event_time ASC) AS future_close,
+                    {feature_cols}
+                FROM {source_table}
+            )
+            SELECT * FROM labeled
+            WHERE {query_where}
+            ORDER BY symbol, event_time ASC
+        """
+
+        logger.info(f"Fetching all eligible labeled rows from DB for {horizon} horizon...")
         df = pd.read_sql(query, engine)
         engine.dispose()
 
-        if df.empty:
-            logger.error(f"No data in {source_table}. Run the ETL pipeline first.")
-            return
+        ml_df = df.copy()
 
-        logger.info(f"Loaded {len(df):,} rows across {df['symbol'].nunique()} assets.")
-
-        # Convert symbol to category to save memory
-        df['symbol'] = df['symbol'].astype('category')
-
-        # Calculate forward-looking labels prior to downsampling to preserve time series
-        logger.info(f"Computing {horizon} forward labels...")
-        df['future_close'] = df.groupby('symbol')['close'].shift(-days_forward)
-        df['target'] = (df['future_close'] > df['close'] * gain_threshold).astype(int)
-
-        ml_df = df.dropna(subset=FEATURES + ['target', 'future_close']).copy()
+        if not ml_df.empty:
+            ml_df['symbol'] = ml_df['symbol'].astype('category')
+            ml_df['target'] = (ml_df['future_close'] > ml_df['close'] * gain_threshold).astype(int)
         
-        # Free up memory from raw df
-        del df
-
-        MAX_ROWS = 300_000
-        if len(ml_df) > MAX_ROWS:
-            logger.info(f"Downsampling labeled dataset from {len(ml_df):,} to {MAX_ROWS:,} for training stability.")
-            ml_df = ml_df.sample(n=MAX_ROWS, random_state=42).sort_values(['symbol', 'event_time'])
+        logger.info(f"Loaded {len(ml_df):,} labeled rows across {ml_df['symbol'].nunique()} assets.")
 
         os.makedirs("/opt/airflow/models", exist_ok=True)
         clean_name = source_table.replace("public.", "")

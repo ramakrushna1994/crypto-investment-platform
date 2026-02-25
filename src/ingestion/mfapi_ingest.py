@@ -154,9 +154,17 @@ def ingest_mutual_funds(max_workers: int = 20):
         sym   = f"MF{code}"
         last  = latest_dates.get(sym)
         records = fetch_nav_history(code, name)
-        if records and last:
-            last_date = last.date() if hasattr(last, 'date') else last
-            records = [r for r in records if r["event_time"] > last_date]
+        
+        if records:
+            if last:
+                last_date = last.date() if hasattr(last, 'date') else last
+                records = [r for r in records if r["event_time"] > last_date]
+            else:
+                # Enforce the global start date of 2016-01-01 for new funds
+                import datetime
+                cutoff = datetime.date(2016, 1, 1)
+                records = [r for r in records if r["event_time"] >= cutoff]
+                
         return records
 
     all_results = []  # list of (records_list,)
