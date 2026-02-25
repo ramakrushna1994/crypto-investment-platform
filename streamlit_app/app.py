@@ -5,8 +5,8 @@ from sqlalchemy import create_engine
 from src.config.settings import POSTGRES
 from src.llm.ollama_analyst import get_ollama_analysis
 
-st.set_page_config(page_title="AI Investment Platform", layout="wide")
-st.title("📈 AI Investment Engine (Crypto & Nifty 50)")
+st.set_page_config(page_title="AI Quant Engine: Investment Desk", layout="wide")
+st.title("📈 AI Quant Engine: Investment Desk")
 
 @st.cache_resource
 def get_db_engine():
