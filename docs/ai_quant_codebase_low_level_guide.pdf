@@ -1,0 +1,677 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R ] /Count 7 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 2428 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+T*
+(AI Quant Investment Engine) Tj
+T*
+(Low-Level Codebase Guide for Junior Developers) Tj
+T*
+(Generated on: 2026-02-26 19:43:51) Tj
+T*
+T*
+(1\) What this system is) Tj
+T*
+(This project is an end-to-end data and ML pipeline for investment signals. It collects raw market data,) Tj
+T*
+(computes technical indicators,) Tj
+T*
+(trains Random Forest models, generates 1-year and 5-year investment signals, validates data quality, and) Tj
+T*
+(distributes output through) Tj
+T*
+(an email report, a FastAPI endpoint, and a Streamlit dashboard.) Tj
+T*
+T*
+(2\) Runtime architecture) Tj
+T*
+(Main containers are defined in docker-compose.yml.) Tj
+T*
+(- postgres: stores all raw, feature, signal, and audit data.) Tj
+T*
+(- airflow-api-server: runs scheduler + API server in one container.) Tj
+T*
+(- airflow-dag-processor and airflow-triggerer: handle DAG parsing and trigger mechanics.) Tj
+T*
+(- streamlit: renders the interactive investment dashboard.) Tj
+T*
+(- api: exposes REST endpoints for signals.) Tj
+T*
+(- ollama + ollama-init: local LLM inference support for narrative analysis and chat.) Tj
+T*
+T*
+(Ports in use:) Tj
+T*
+(- Airflow web/API: 8080) Tj
+T*
+(- Spark UI \(when active\): 4040) Tj
+T*
+(- FastAPI: 8000) Tj
+T*
+(- Streamlit: 8501) Tj
+T*
+(- Ollama: 11434) Tj
+T*
+(- Postgres: 5432) Tj
+T*
+T*
+(3\) Repository map and ownership) Tj
+T*
+(Read these files first in this exact order:) Tj
+T*
+(- dags/ai_quant_daily_pipeline.py: orchestration logic and dependency graph.) Tj
+T*
+(- src/ingestion/*.py: raw data ingestion into bronze schema.) Tj
+T*
+(- src/etl/pyspark_etl.py: feature engineering into silver schema.) Tj
+T*
+(- src/recommendation/train_model.py: model training and artifact persistence.) Tj
+T*
+(- src/recommendation/strategy_engine.py: inference and signal table writes to gold schema.) Tj
+T*
+(- src/recommendation/email_alert.py: final reporting + SMTP dispatch.) Tj
+T*
+(- src/audit/*.py and database/audit_reconciliation_framework.sql: audit layer.) Tj
+T*
+(- api/main.py and streamlit_app/app.py: serving layer.) Tj
+T*
+T*
+(4\) Data layers and schema strategy) Tj
+T*
+(The pipeline uses a medallion pattern:) Tj
+T*
+(- bronze: raw ingested OHLCV or NAV data.) Tj
+T*
+(- silver: technical indicators and cleaned feature data.) Tj
+T*
+(- gold: decision-oriented signal tables.) Tj
+T*
+(- audit: ETL observability, reconciliation, and quality metrics.) Tj
+T*
+T*
+(Common key columns across layers:) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 2530 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(- symbol: instrument identifier \(for mutual funds it is synthetic, such as MF<schemeCode>\).) Tj
+T*
+(- event_time or trade_date: timestamp/date of the datapoint.) Tj
+T*
+T*
+(5\) DAG execution flow in detail) Tj
+T*
+(DAG ID: ai_quant_daily_pipeline.) Tj
+T*
+(Asset classes covered:) Tj
+T*
+(- crypto) Tj
+T*
+(- nifty50) Tj
+T*
+(- nifty_midcap) Tj
+T*
+(- nifty_smallcap) Tj
+T*
+(- mutual_funds) Tj
+T*
+T*
+(Per asset class, the logical chain is:) Tj
+T*
+(ingest -> spark_etl -> train_model -> generate_signals -> audit_etl -> quality_check -> reconcile) Tj
+T*
+T*
+(Scheduling behavior:) Tj
+T*
+(- crypto and nifty50 run in parallel first.) Tj
+T*
+(- midcap, smallcap, and mutual funds then run sequentially to reduce memory pressure.) Tj
+T*
+(- after all branches: generate_daily_audit_report -> send_opportunity_email) Tj
+T*
+T*
+(6\) Ingestion layer internals) Tj
+T*
+(6.1 Binance ingestion \(src/ingestion/binance_ingest.py\)) Tj
+T*
+(- Pulls klines from Binance public API using symbols from settings.BINANCE.) Tj
+T*
+(- Writes to bronze.crypto_price_raw.) Tj
+T*
+(- Uses UNIQUE\(symbol, event_time\) and ON CONFLICT DO NOTHING for idempotency.) Tj
+T*
+T*
+(6.2 NSE + Yahoo Finance ingestion \(src/ingestion/yfinance_ingest.py\)) Tj
+T*
+(- Dynamically fetches index constituents from NSE CSV endpoints.) Tj
+T*
+(- Uses yfinance per symbol and captures longName as asset_name when possible.) Tj
+T*
+(- Implements incremental loading by pre-reading MAX\(event_time\) per symbol.) Tj
+T*
+(- Writes to bronze.<index>_price_raw with asset_name field.) Tj
+T*
+T*
+(6.3 Mutual fund ingestion \(src/ingestion/mfapi_ingest.py\)) Tj
+T*
+(- Discovers schemes from MFAPI, filtered by top AMC keywords + Direct Growth constraint.) Tj
+T*
+(- Fetches NAV history concurrently with ThreadPoolExecutor.) Tj
+T*
+(- Applies incremental date filtering and inserts/upserts into bronze.mutual_funds_price_raw.) Tj
+T*
+T*
+(7\) Spark ETL internals \(src/etl/pyspark_etl.py\)) Tj
+T*
+(Main function: run_spark_etl\(source_table, dest_table\).) Tj
+T*
+T*
+(Execution steps:) Tj
+T*
+(- Create SparkSession tuned for Docker memory constraints and adaptive execution.) Tj
+T*
+(- Determine source MIN\(id\), MAX\(id\), COUNT\(*\) in Postgres.) Tj
+T*
+(- Choose JDBC partition strategy:) Tj
+T*
+(  - if min/max present, parallel JDBC read using id bounds.) Tj
+T*
+(  - else fallback to single partition read.) Tj
+T*
+(- Cast numeric columns and repartition by symbol before window functions.) Tj
+T*
+(- Compute indicators with Spark windows in compute_indicators:) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 2001 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(  - moving_avg_7d, volatility_7d) Tj
+T*
+(  - ema_20 \(implemented as SMA-based proxy in this code\)) Tj
+T*
+(  - macd, macd_signal) Tj
+T*
+(  - Bollinger bands \(bb_upper, bb_lower\)) Tj
+T*
+(  - rsi_14) Tj
+T*
+(  - atr_14) Tj
+T*
+(  - stoch_k, stoch_d) Tj
+T*
+(  - sma_50, sma_200) Tj
+T*
+(- Drop rows where sma_50 is null \(warmup period filter\).) Tj
+T*
+(- Write to silver table with mode=overwrite.) Tj
+T*
+T*
+(Important implication:) Tj
+T*
+(- overwrite mode recreates the full silver table each run for that asset class.) Tj
+T*
+T*
+(8\) Model training internals \(src/recommendation/train_model.py\)) Tj
+T*
+(Main function: train_model\(source_table, horizon\).) Tj
+T*
+T*
+(Horizons configured:) Tj
+T*
+(- 1y: 252 days ahead, positive class if future_close > close * 1.10) Tj
+T*
+(- 5y: 1260 days ahead, positive class if future_close > close * 1.50) Tj
+T*
+T*
+(Labeling strategy:) Tj
+T*
+(- SQL CTE computes future_close with LEAD\(close, days_forward\) PARTITION BY symbol ORDER BY) Tj
+T*
+(  event_time.) Tj
+T*
+(- Rows with null features or null future_close are excluded.) Tj
+T*
+T*
+(Split strategy:) Tj
+T*
+(- Chronological 80/20 split \(not random\) to reduce look-ahead bias.) Tj
+T*
+T*
+(Model:) Tj
+T*
+(- RandomForestClassifier) Tj
+T*
+(- class_weight='balanced') Tj
+T*
+(- n_estimators 100 for 1y, 200 for 5y) Tj
+T*
+(- max_depth 12, random_state 42, n_jobs -1) Tj
+T*
+T*
+(Artifacts:) Tj
+T*
+(- Saved in /opt/airflow/models/<source_table_name>_rf_<horizon>_model.joblib) Tj
+T*
+(- If dataset is empty, writes a DummyClassifier fallback.) Tj
+T*
+T*
+(9\) Signal engine internals \(src/recommendation/strategy_engine.py\)) Tj
+T*
+(Main function: generate_signals\(source_table, dest_table\).) Tj
+T*
+T*
+(Inference flow:) Tj
+T*
+(- Load latest row per symbol from silver source.) Tj
+T*
+(- Load both 1y and 5y model artifacts.) Tj
+T*
+(- Compute probabilities with safe predict logic for single-class models.) Tj
+T*
+(- Convert probabilities to business labels with threshold tables.) Tj
+T*
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 2140 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(Threshold mapping examples:) Tj
+T*
+(- 1y >= 0.72 -> INVEST NOW) Tj
+T*
+(- 1y >= 0.58 -> ACCUMULATE) Tj
+T*
+(- 5y >= 0.70 -> STRONG HOLD) Tj
+T*
+T*
+(Gold table schema:) Tj
+T*
+(- symbol, trade_date) Tj
+T*
+(- signal, confidence \(primary 1-year view\)) Tj
+T*
+(- signal_1y, confidence_1y) Tj
+T*
+(- signal_5y, confidence_5y) Tj
+T*
+T*
+(Upsert behavior:) Tj
+T*
+(- PRIMARY KEY \(symbol, trade_date\)) Tj
+T*
+(- ON CONFLICT updates signal and confidence columns.) Tj
+T*
+T*
+(10\) Report and email pipeline \(src/recommendation/email_alert.py\)) Tj
+T*
+(Main function: send_opportunity_email\(\).) Tj
+T*
+T*
+(Report generation behavior:) Tj
+T*
+(- Reads latest signals + latest features per symbol for each asset class.) Tj
+T*
+(- Includes asset_name \(fallback to symbol if asset_name missing\).) Tj
+T*
+(- Filters rows where any signal column is one of:) Tj
+T*
+(  INVEST NOW, ACCUMULATE, STRONG BUY, BUY) Tj
+T*
+(- Writes one worksheet per asset class into an XLSX file.) Tj
+T*
+T*
+(Formatting behavior:) Tj
+T*
+(- Green row highlight if any signal column is INVEST NOW.) Tj
+T*
+(- confidence columns displayed as percentages using 0.00% number format.) Tj
+T*
+T*
+(SMTP behavior:) Tj
+T*
+(- Reads credentials from environment, then Airflow Variables as fallback.) Tj
+T*
+(- Supports multiple recipients \(comma or semicolon separated\).) Tj
+T*
+(- If default XLSX path is locked, writes to timestamped fallback filename.) Tj
+T*
+T*
+(11\) Audit framework internals) Tj
+T*
+(11.1 SQL layer \(database/audit_reconciliation_framework.sql\)) Tj
+T*
+(Creates audit schema objects:) Tj
+T*
+(- tables: etl_audit_log, etl_reconciliation, data_quality_metrics, table_lineage, change_log,) Tj
+T*
+(  process_audit) Tj
+T*
+(- views: v_audit_summary, v_reconciliation_status, v_data_quality_summary, v_failed_tasks) Tj
+T*
+(- functions: sp_log_etl_start, sp_log_etl_end, sp_reconcile_tables, fn_generate_daily_report) Tj
+T*
+T*
+(11.2 Python layer \(src/audit/audit_logger.py\)) Tj
+T*
+(AuditLogger methods:) Tj
+T*
+(- log_etl_start / log_etl_success / log_etl_failure) Tj
+T*
+(- reconcile_tables) Tj
+T*
+(- check_data_quality) Tj
+T*
+(- get_audit_summary) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 1939 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(- get_failed_tasks) Tj
+T*
+T*
+(11.3 Airflow glue layer \(src/audit/audit_tasks.py\)) Tj
+T*
+(Task wrappers called by the DAG:) Tj
+T*
+(- audit_etl_task) Tj
+T*
+(- quality_check_task) Tj
+T*
+(- reconcile_task) Tj
+T*
+(- generate_daily_audit_report) Tj
+T*
+T*
+(12\) FastAPI service internals \(api/main.py\)) Tj
+T*
+(Endpoint:) Tj
+T*
+(GET /api/v1/signals/{asset_class}?limit=50&min_confidence=0.0) Tj
+T*
+T*
+(Behavior:) Tj
+T*
+(- validates asset_class against allowlist.) Tj
+T*
+(- queries latest row per symbol from gold.<asset_class>_investment_signals.) Tj
+T*
+(- filters by confidence_1y >= threshold OR confidence_5y >= threshold.) Tj
+T*
+(- returns JSON with asset_class, count, and data array.) Tj
+T*
+T*
+(13\) Streamlit dashboard internals \(streamlit_app/app.py\)) Tj
+T*
+(Primary function: render_asset_dashboard\(signals_table, features_table, asset_label, ...\)) Tj
+T*
+T*
+(UI flow:) Tj
+T*
+(- Load latest signals and latest features \(cached, TTL 10 minutes\).) Tj
+T*
+(- Allow horizon switch between 1-year and 5-year columns.) Tj
+T*
+(- Merge with feature columns for display metrics.) Tj
+T*
+(- Show ranked table with signal labels and confidence.) Tj
+T*
+(- On row select, load full symbol history and render charts.) Tj
+T*
+(- Show AI narrative via Ollama, with deterministic fallback notes when LLM is unavailable.) Tj
+T*
+T*
+(Tabs:) Tj
+T*
+(- Nifty 50) Tj
+T*
+(- Nifty Mid Cap) Tj
+T*
+(- Nifty Small Cap) Tj
+T*
+(- Indian Mutual Funds) Tj
+T*
+(- Crypto) Tj
+T*
+T*
+(14\) LLM integration \(src/llm/ollama_analyst.py\)) Tj
+T*
+(Functions:) Tj
+T*
+(- get_ollama_analysis: summary narrative for selected symbol.) Tj
+T*
+(- chat_with_ollama: question-answer interaction using contextual indicators.) Tj
+T*
+T*
+(Operational note:) Tj
+T*
+(- Uses internal URL http://ollama:11434 from docker network.) Tj
+T*
+(- If model call fails, caller falls back gracefully.) Tj
+T*
+T*
+(15\) Configuration and secrets) Tj
+T*
+(Core configs:) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 2426 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(- src/config/settings.py provides POSTGRES and BINANCE dataclasses.) Tj
+T*
+(- .env is loaded by docker-compose for runtime secrets and credentials.) Tj
+T*
+T*
+(Security reminder for juniors:) Tj
+T*
+(- Never commit .env.) Tj
+T*
+(- Rotate credentials immediately if they are ever exposed.) Tj
+T*
+T*
+(16\) Local run and debugging checklist) Tj
+T*
+(First boot:) Tj
+T*
+(1. docker compose up -d --build) Tj
+T*
+(2. verify Airflow UI on port 8080) Tj
+T*
+(3. run or trigger ai_quant_daily_pipeline) Tj
+T*
+T*
+(Quick health checks:) Tj
+T*
+(- airflow tasks test ai_quant_daily_pipeline send_opportunity_email <date>) Tj
+T*
+(- API root at http://localhost:8000/) Tj
+T*
+(- Streamlit at http://localhost:8501) Tj
+T*
+T*
+(Useful debug targets:) Tj
+T*
+(- ingestion failures: network/API throttling, symbol list endpoint changes.) Tj
+T*
+(- Spark ETL failures: memory pressure, JDBC partition bounds, missing id column.) Tj
+T*
+(- model failures: insufficient history for horizon labels.) Tj
+T*
+(- email failures: SMTP auth, invalid recipient format, output file permissions.) Tj
+T*
+T*
+(17\) How to add a new asset class \(practical recipe\)) Tj
+T*
+(1. Add ingestion function that writes bronze.<new>_price_raw with symbol, event_time, OHLCV.) Tj
+T*
+(2. Add DAG tasks:) Tj
+T*
+(   - ingest_<new>) Tj
+T*
+(   - spark_etl_<new> \(dest silver.<new>_features_daily\)) Tj
+T*
+(   - train_model_<new>) Tj
+T*
+(   - generate_signals_<new> \(dest gold.<new>_investment_signals\)) Tj
+T*
+(   - audit + quality + reconcile tasks) Tj
+T*
+(3. Add optional tabs in Streamlit and API route support in allowlist.) Tj
+T*
+(4. Add email tab mapping in send_opportunity_email.) Tj
+T*
+(5. Validate end-to-end with airflow tasks test per step.) Tj
+T*
+T*
+(18\) Common code-level pitfalls to watch) Tj
+T*
+(- SQL injection risk: some table names are interpolated via f-strings. Keep table inputs controlled.) Tj
+T*
+(- Overwrite semantics in ETL can remove table-level extras. Re-apply schema changes if needed.) Tj
+T*
+(- Encoding issues in source comments indicate mixed editor encodings; standardize to UTF-8.) Tj
+T*
+(- LLM chat prompt currently allows high-certainty investment advice; review compliance before) Tj
+T*
+(  production.) Tj
+T*
+T*
+(19\) Suggested learning path for a junior developer) Tj
+T*
+(Week 1:) Tj
+T*
+(- Read DAG and trace one asset class through all modules.) Tj
+T*
+(- Run one task at a time with airflow tasks test.) Tj
+T*
+ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 17 0 R >>
+endobj
+17 0 obj
+<< /Length 866 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+42 760 Td
+(Week 2:) Tj
+T*
+(- Add one indicator to Spark ETL and propagate through training + inference.) Tj
+T*
+(- Extend report formatting and confirm email output.) Tj
+T*
+T*
+(Week 3:) Tj
+T*
+(- Add one data quality rule in audit SQL and surface it in the daily audit report.) Tj
+T*
+T*
+(20\) Final mental model) Tj
+T*
+(Think of the system as a pipeline of contracts:) Tj
+T*
+(- Ingestion guarantees bronze row shape.) Tj
+T*
+(- ETL guarantees feature completeness and indicator semantics in silver.) Tj
+T*
+(- Training guarantees model artifacts by horizon.) Tj
+T*
+(- Signal engine guarantees normalized labels and confidence in gold.) Tj
+T*
+(- Audit guarantees observability and trust.) Tj
+T*
+(- API/UI/Email guarantee consumable outputs.) Tj
+T*
+T*
+(If one contract breaks, fix the contract boundary first, not the symptom in downstream code.) Tj
+ET
+endstream
+endobj
+xref
+0 18
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000163 00000 n 
+0000000233 00000 n 
+0000000359 00000 n 
+0000002838 00000 n 
+0000002964 00000 n 
+0000005545 00000 n 
+0000005671 00000 n 
+0000007723 00000 n 
+0000007851 00000 n 
+0000010043 00000 n 
+0000010171 00000 n 
+0000012162 00000 n 
+0000012290 00000 n 
+0000014768 00000 n 
+0000014896 00000 n 
+trailer
+<< /Size 18 /Root 1 0 R >>
+startxref
+15813
+%%EOF
