@@ -1,22 +1,23 @@
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://ai_quant:ai_quant@postgres:5432/ai_quant
+  AIRFLOW__API__AUTH_BACKENDS: airflow.providers.fab.auth_manager.api.auth.backend.basic_auth
+  AIRFLOW__API__SECRET_KEY: "local-dev-secret-key"
+  AIRFLOW__WEBSERVER__SECRET_KEY: "local-dev-secret-key"
+  AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+  AIRFLOW__LOGGING__BASE_LOG_FOLDER: /opt/airflow/logs
+  AIRFLOW__LOGGING__REMOTE_LOGGING: "false"
+  AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT: 8793
+  PYTHONPATH: /opt/airflow
+  PIP_REQUIREMENTS: /requirements.txt
+  TZ: Asia/Kolkata
+
 x-airflow-common: &airflow-common
   build: .
-  image: crypto-airflow:3.1.4
+  image: ai-quant-airflow:3.1.4
   env_file: .env
-  environment:
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://crypto:crypto@postgres:5432/crypto
-    AIRFLOW__API__AUTH_BACKENDS: airflow.providers.fab.auth_manager.api.auth.backend.basic_auth
-    AIRFLOW__API__SECRET_KEY: "local-dev-secret-key"
-    AIRFLOW__WEBSERVER__SECRET_KEY: "local-dev-secret-key"
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-    AIRFLOW__LOGGING__BASE_LOG_FOLDER: /opt/airflow/logs
-    AIRFLOW__LOGGING__REMOTE_LOGGING: "false"
-    AIRFLOW__LOGGING__WORKER_LOG_SERVER_PORT: 8793
-    PYTHONPATH: /opt/airflow
-    PIP_REQUIREMENTS: /requirements.txt
-    TZ: Asia/Kolkata
-    #_PIP_ADDITIONAL_REQUIREMENTS: "pyspark==3.5.1 scikit-learn requests apache-airflow-providers-fab"
+  environment: *airflow-env
 
   volumes:
     - ./dags:/opt/airflow/dags
@@ -32,10 +33,11 @@ x-airflow-common: &airflow-common
 services:
   postgres:
     image: postgres:15
+    container_name: ai-quant-postgres
     environment:
-      POSTGRES_USER: crypto
-      POSTGRES_PASSWORD: crypto
-      POSTGRES_DB: crypto
+      POSTGRES_USER: ai_quant
+      POSTGRES_PASSWORD: ai_quant
+      POSTGRES_DB: ai_quant
       TZ: Asia/Kolkata
     ports:
       - "5432:5432"
@@ -44,43 +46,51 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    entrypoint: /bin/bash
+    container_name: ai-quant-airflow-init
     command: >
-      -c "airflow db migrate && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true"
+      bash -c "until pg_isready -h postgres -p 5432; do sleep 2; done && psql -h postgres -U ai_quant -d ai_quant -c 'CREATE SCHEMA IF NOT EXISTS airflow; CREATE SCHEMA IF NOT EXISTS bronze; CREATE SCHEMA IF NOT EXISTS silver; CREATE SCHEMA IF NOT EXISTS gold;' && airflow db migrate && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true"
+    environment:
+      <<: *airflow-env
+      PGPASSWORD: ai_quant
     restart: "no"
-
-  # airflow-scheduler:
-  #   <<: *airflow-common
-  #   command: airflow scheduler
-  #   ports:
-  #   - "4040:4040"
-  #   depends_on:
-  #     airflow-init:
-  #       condition: service_completed_successfully
 
   airflow-api-server:
     <<: *airflow-common
+    container_name: ai-quant-airflow-api-server
     command: >
-      bash -c " airflow db migrate && airflow scheduler & airflow serve-logs & airflow api-server "
+      bash -c "airflow scheduler & airflow api-server"
     ports:
       - "8080:8080"
       - "4040:4040"
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+    mem_limit: 6g
+    memswap_limit: 6g
 
   airflow-dag-processor:
     <<: *airflow-common
-    container_name: airflow-dag-processor
+    container_name: ai-quant-dag-processor
     command: dag-processor
     depends_on:
-      - airflow-api-server
+      airflow-init:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: ai-quant-airflow-triggerer
+    command: triggerer
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: on-failure:5
 
   streamlit:
     build:
       context: .
       dockerfile: Dockerfile.streamlit
-    container_name: crypto-streamlit
+    container_name: ai-quant-streamlit
     ports:
       - "8501:8501"
     volumes:
@@ -96,7 +106,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.fastapi
-    container_name: crypto-fastapi
+    container_name: ai-quant-fastapi
     ports:
       - "8000:8000"
     volumes:
@@ -110,7 +120,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: ai-quant-ollama
     ports:
       - "11434:11434"
     volumes:
@@ -119,7 +129,7 @@ services:
 
   ollama-init:
     image: curlimages/curl:latest
-    container_name: ollama-init
+    container_name: ai-quant-ollama-init
     depends_on:
       - ollama
     command: >

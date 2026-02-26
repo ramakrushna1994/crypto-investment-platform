@@ -61,7 +61,8 @@ def generate_signals(source_table="public.mutual_funds_features_daily", dest_tab
     """Fetch latest features, run inference models, and update signals table."""
     logger.info(f"Generating signals: {source_table} -> {dest_table}")
 
-    clean_name = source_table.replace("public.", "")
+    # Get base table name for model path (handle schema.table_name)
+    clean_name = source_table.split(".")[-1] if "." in source_table else source_table
 
     # Load both investor horizon models
     models = {}

@@ -1,5 +1,8 @@
-/.cursor
 logs/
+files/
 __pycache__/
 *.pyc
 .env
+.vscode/
+*.md
+!README.md

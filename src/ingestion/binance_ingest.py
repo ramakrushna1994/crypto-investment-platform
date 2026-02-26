@@ -20,7 +20,8 @@ def ingest_binance_data():
         cur = conn.cursor()
 
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS crypto_price_raw (
+            CREATE TABLE IF NOT EXISTS bronze.crypto_price_raw (
+                id SERIAL PRIMARY KEY,
                 symbol TEXT,
                 open NUMERIC,
                 high NUMERIC,
@@ -28,7 +29,7 @@ def ingest_binance_data():
                 close NUMERIC,
                 volume NUMERIC,
                 event_time TIMESTAMP,
-                PRIMARY KEY (symbol, event_time)
+                UNIQUE (symbol, event_time)
             )
         """)
 
@@ -48,7 +49,7 @@ def ingest_binance_data():
 
             for r in data:
                 cur.execute("""
-                    INSERT INTO crypto_price_raw VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    INSERT INTO bronze.crypto_price_raw (symbol, open, high, low, close, volume, event_time) VALUES (%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT DO NOTHING
                 """, (
                     symbol,

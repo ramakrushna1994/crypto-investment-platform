@@ -66,7 +66,7 @@ def get_db_connection():
 
 def ensure_table_exists(table_name):
     query = f"""
-    CREATE TABLE IF NOT EXISTS public.{table_name} (
+    CREATE TABLE IF NOT EXISTS bronze.{table_name} (
         id SERIAL PRIMARY KEY,
         symbol VARCHAR(50) NOT NULL,
         asset_name VARCHAR(255),
@@ -101,7 +101,7 @@ def ingest_index(symbols, table_name, start_date=None):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT symbol, MAX(event_time) FROM public.{table_name} GROUP BY symbol;")
+                cur.execute(f"SELECT symbol, MAX(event_time) FROM bronze.{table_name} GROUP BY symbol;")
                 for row in cur.fetchall():
                     latest_dates[row[0]] = row[1]
     except Exception as e:
@@ -128,7 +128,11 @@ def ingest_index(symbols, table_name, start_date=None):
             else:
                 hist = ticker.history(period="1mo")
             
+            # Drop rows with NaN values before iterating
+            hist = hist.dropna(subset=['Open', 'High', 'Low', 'Close'])
+
             for index, row in hist.iterrows():
+                # Provide a fallback to 0.0 for volume, but ensure prices are valid floats
                 all_records.append((
                     symbol,
                     asset_name,
@@ -137,7 +141,7 @@ def ingest_index(symbols, table_name, start_date=None):
                     float(row['High']),
                     float(row['Low']),
                     float(row['Close']),
-                    float(row['Volume'])
+                    float(row['Volume']) if pd.notna(row['Volume']) else 0.0
                 ))
                 
             # Rate limit mitigation for Yahoo Finance
@@ -150,7 +154,7 @@ def ingest_index(symbols, table_name, start_date=None):
         return
 
     insert_query = f"""
-        INSERT INTO public.{table_name} (symbol, asset_name, event_time, open, high, low, close, volume)
+        INSERT INTO bronze.{table_name} (symbol, asset_name, event_time, open, high, low, close, volume)
         VALUES %s
         ON CONFLICT (symbol, event_time) DO UPDATE SET asset_name = EXCLUDED.asset_name;
     """

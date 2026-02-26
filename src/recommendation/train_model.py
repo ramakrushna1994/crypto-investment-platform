@@ -84,7 +84,8 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
         logger.info(f"Loaded {len(ml_df):,} labeled rows across {ml_df['symbol'].nunique()} assets.")
 
         os.makedirs("/opt/airflow/models", exist_ok=True)
-        clean_name = source_table.replace("public.", "")
+        # Get base table name for model path (handle schema.table_name)
+        clean_name = source_table.split(".")[-1] if "." in source_table else source_table
         model_path = f"/opt/airflow/models/{clean_name}_rf_{horizon}_model.joblib"
 
         if ml_df.empty:
@@ -127,7 +128,8 @@ def train_model(source_table="public.mutual_funds_features_daily", horizon="1y")
         logger.info("\n" + classification_report(y_test, preds))
 
         os.makedirs("/opt/airflow/models", exist_ok=True)
-        clean_name = source_table.replace("public.", "")
+        # Get base table name for model path (handle schema.table_name)
+        clean_name = source_table.split(".")[-1] if "." in source_table else source_table
         model_path = f"/opt/airflow/models/{clean_name}_rf_{horizon}_model.joblib"
         joblib.dump(model, model_path)
         logger.info(f"Model saved successfully: {model_path}")

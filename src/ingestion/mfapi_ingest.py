@@ -125,7 +125,8 @@ def ingest_mutual_funds(max_workers: int = 20):
     cur  = conn.cursor()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS public.mutual_funds_price_raw (
+        CREATE TABLE IF NOT EXISTS bronze.mutual_funds_price_raw (
+            id         SERIAL PRIMARY KEY,
             symbol     TEXT,
             asset_name TEXT,
             event_time DATE,
@@ -134,14 +135,14 @@ def ingest_mutual_funds(max_workers: int = 20):
             low        NUMERIC,
             close      NUMERIC,
             volume     BIGINT,
-            PRIMARY KEY (symbol, event_time)
+            UNIQUE (symbol, event_time)
         )
     """)
     conn.commit()
 
     # Latest date per symbol for incremental loading
     cur.execute("""
-        SELECT symbol, MAX(event_time) FROM public.mutual_funds_price_raw GROUP BY symbol
+        SELECT symbol, MAX(event_time) FROM bronze.mutual_funds_price_raw GROUP BY symbol
     """)
     latest_dates = {row[0]: row[1] for row in cur.fetchall()}
 
@@ -187,7 +188,7 @@ def ingest_mutual_funds(max_workers: int = 20):
             r["open"], r["high"], r["low"], r["close"], r["volume"]
         ) for r in records]
         execute_values(cur, """
-            INSERT INTO public.mutual_funds_price_raw
+            INSERT INTO bronze.mutual_funds_price_raw
                 (symbol, asset_name, event_time, open, high, low, close, volume)
             VALUES %s
             ON CONFLICT (symbol, event_time) DO UPDATE SET

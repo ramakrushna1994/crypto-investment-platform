@@ -9,9 +9,9 @@ from dataclasses import dataclass
 class PostgresConfig:
     host: str = os.getenv("POSTGRES_HOST", "postgres")
     port: int = 5432
-    db: str = os.getenv("POSTGRES_DB", "crypto")
-    user: str = os.getenv("POSTGRES_USER", "crypto")
-    password: str = os.getenv("POSTGRES_PASSWORD", "crypto")
+    db: str = os.getenv("POSTGRES_DB", "ai_quant")
+    user: str = os.getenv("POSTGRES_USER", "ai_quant")
+    password: str = os.getenv("POSTGRES_PASSWORD", "ai_quant")
 
     @property
     def jdbc_url(self):

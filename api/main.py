@@ -3,7 +3,7 @@ import psycopg2
 from src.config.settings import POSTGRES
 
 app = FastAPI(
-    title="Crypto & Mutual Fund Investment API",
+    title="AI Quant Investment API",
     description="REST API for accessing AI-generated investment signals.",
     version="1.0.0"
 )
@@ -29,7 +29,7 @@ def get_investment_signals(
     if asset_class not in valid_classes:
         raise HTTPException(status_code=400, detail=f"Invalid asset class. Must be one of {valid_classes}")
 
-    table_name = f"{asset_class}_investment_signals"
+    table_name = f"gold.{asset_class}_investment_signals"
     
     try:
         conn = get_db_connection()

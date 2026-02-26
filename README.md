@@ -1,4 +1,4 @@
-# Crypto Investment Platform
+# AI Quant Investment Engine
 
 This repository contains a daily data pipeline and machine learning engine for tracking and predicting price movements across cryptocurrencies, Indian equities (Nifty indices), and mutual funds.
 
@@ -27,7 +27,7 @@ Currently fetching daily data from three main sources. No auth keys required.
 
 ### Airflow Pipeline Architecture
 
-The `crypto_daily_pipeline` DAG orchestrates the scripts across all 5 asset classes in parallel. Here is the flowchart of how the scripts execute:
+The `ai_quant_daily_pipeline` DAG orchestrates the scripts across all 5 asset classes in parallel. Here is the flowchart of how the scripts execute:
 
 ```mermaid
 graph TD
@@ -110,22 +110,22 @@ graph LR
 
 You'll need roughly 8GB of RAM available (16GB recommended if you plan on running the local LLM).
 
-1. **Configure Passwords:** By default, the `docker-compose.yml` uses the credentials `crypto`/`crypto` for the PostgreSQL database. If you wish to secure your local deployment:
+1. **Configure Passwords:** By default, the `docker-compose.yml` uses the credentials `ai_quant`/`ai_quant` for the PostgreSQL database. If you wish to secure your local deployment:
    - Create a `.env` file in the root directory.
    - Add your custom credentials (e.g., `POSTGRES_PASSWORD=your_secure_password`).
    - Update the `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` string in `docker-compose.yml` to match your new password.
 
 2. **Clone and spin up the environment:**
 ```bash
-git clone https://github.com/ramakrushna1994/crypto-investment-platform.git
-cd crypto-investment-platform
+git clone https://github.com/ramakrushna1994/ai-quant-investment-engine.git
+cd ai-quant-investment-engine
 docker-compose up -d --build
 ```
 *Note: The `ollama-init` service will run briefly on startup to pull the `llama3.2:latest` model and then exit.*
 
 2. Seed the database (Full Backfill):
 - Go to the Airflow UI at `http://localhost:8080` (auth: admin/admin).
-- Turn on the `crypto_daily_pipeline` DAG and trigger it manually.
+- Turn on the `ai_quant_daily_pipeline` DAG and trigger it manually.
 - Wait for the pipeline to finish fetching and processing the historical data (default starts at 2016-01-01). Depending on your connection, this usually takes 15-30 minutes.
 
 3. View the Dashboards & APIs:

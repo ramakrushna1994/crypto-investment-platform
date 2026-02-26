@@ -6,6 +6,61 @@ from src.config.settings import POSTGRES
 from src.llm.ollama_analyst import get_ollama_analysis
 
 st.set_page_config(page_title="AI Quant Engine: Investment Desk", layout="wide")
+
+# ── Dynamic Finance Hub CSS Theme ─────────────────────────────────────────────
+st.markdown("""
+<style>
+    /* Premium Dark Theme Background */
+    .stApp {
+        background: radial-gradient(circle at top left, #151a22 0%, #0e1117 100%);
+    }
+    /* Sleek Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #1a222c;
+        border-radius: 5px;
+        color: #e0e6ed;
+        border: 1px solid #2B3544;
+        padding: 5px 25px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #00FF7F !important;
+        color: #0E1117 !important;
+        font-weight: 800;
+        box-shadow: 0 0 10px rgba(0, 255, 127, 0.3);
+    }
+    /* Main H1 Title Header */
+    h1 {
+        color: #00FF7F !important;
+        font-family: 'Inter', Courier, monospace;
+        letter-spacing: -0.5px;
+        border-bottom: 1px solid #2B3544;
+        padding-bottom: 15px;
+    }
+    /* Info Panels / AI Blocks */
+    .stAlert {
+        background-color: #12161c;
+        border-left: 4px solid #00FF7F;
+        border-right: 1px solid #2b3544;
+        border-top: 1px solid #2b3544;
+        border-bottom: 1px solid #2b3544;
+    }
+    /* Dataframes / Tables */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #2b3544;
+        border-radius: 6px;
+        background-color: #12161c;
+    }
+    /* Form input labels */
+    .stSelectbox label, .stRadio label {
+        color: #a0aec0 !important;
+        font-weight: 600;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📈 AI Quant Engine: Investment Desk")
 
 @st.cache_resource
@@ -351,8 +406,8 @@ try:
     
     with tab1:
         render_asset_dashboard(
-            signals_table="public.nifty50_investment_signals",
-            features_table="public.nifty50_features_daily",
+            signals_table="gold.nifty50_investment_signals",
+            features_table="silver.nifty50_features_daily",
             asset_label="Nifty 50",
             currency_prefix="₹",
             currency_suffix=" INR"
@@ -360,8 +415,8 @@ try:
         
     with tab2:
         render_asset_dashboard(
-            signals_table="public.nifty_midcap_investment_signals",
-            features_table="public.nifty_midcap_features_daily",
+            signals_table="gold.nifty_midcap_investment_signals",
+            features_table="silver.nifty_midcap_features_daily",
             asset_label="Nifty Mid Cap",
             currency_prefix="₹",
             currency_suffix=" INR"
@@ -369,8 +424,8 @@ try:
         
     with tab3:
         render_asset_dashboard(
-            signals_table="public.nifty_smallcap_investment_signals",
-            features_table="public.nifty_smallcap_features_daily",
+            signals_table="gold.nifty_smallcap_investment_signals",
+            features_table="silver.nifty_smallcap_features_daily",
             asset_label="Nifty Small Cap",
             currency_prefix="₹",
             currency_suffix=" INR"
@@ -378,8 +433,8 @@ try:
         
     with tab4:
         render_asset_dashboard(
-            signals_table="public.mutual_funds_investment_signals",
-            features_table="public.mutual_funds_features_daily",
+            signals_table="gold.mutual_funds_investment_signals",
+            features_table="silver.mutual_funds_features_daily",
             asset_label="Indian Mutual Funds",
             currency_prefix="₹",
             currency_suffix=" INR"
@@ -387,8 +442,8 @@ try:
         
     with tab5:
         render_asset_dashboard(
-            signals_table="public.crypto_investment_signals",
-            features_table="public.crypto_features_daily",
+            signals_table="gold.crypto_investment_signals",
+            features_table="silver.crypto_features_daily",
             asset_label="Cryptocurrency",
             currency_prefix="$"
         )
