@@ -16,7 +16,7 @@ x-airflow-env: &airflow-env
 x-airflow-common: &airflow-common
   build: .
   image: ai-quant-airflow:3.1.4
-  env_file: .env
+  # env_file: .env
   environment: *airflow-env
 
   volumes:
