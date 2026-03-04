@@ -295,6 +295,7 @@ with DAG(
             "source_table": "silver.mutual_funds_features_daily",
             "required_horizons": "1y",
             "max_report_age_days": 10,
+            "max_high_drift_features": 15,
         },
         execution_timeout=timedelta(minutes=15),
     )
