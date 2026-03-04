@@ -4,6 +4,7 @@
 logs/
 *.log
 spark-events/
+files/
 
 # Environments
 .env
@@ -12,6 +13,7 @@ spark-events/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
 # Models and ML Checkpoints
 models/
@@ -21,3 +23,7 @@ models/
 # IDEs
 .vscode/
 .idea/
+
+# Docs
+*.md
+!README.md

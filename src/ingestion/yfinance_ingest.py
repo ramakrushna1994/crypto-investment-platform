@@ -16,33 +16,54 @@ from src.config.settings import POSTGRES
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Core indices to track
-NIFTY_50_SYMBOLS = [
-    "ADANIENT.NS", "ADANIPORTS.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "AXISBANK.NS",
-    "BAJAJ-AUTO.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", "BPCL.NS", "BHARTIARTL.NS",
-    "BRITANNIA.NS", "CIPLA.NS", "COALINDIA.NS", "DIVISLAB.NS", "DRREDDY.NS",
-    "EICHERMOT.NS", "GRASIM.NS", "HCLTECH.NS", "HDFCBANK.NS", "HDFCLIFE.NS",
-    "HEROMOTOCO.NS", "HINDALCO.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "ITC.NS",
-    "INDUSINDBK.NS", "INFY.NS", "JSWSTEEL.NS", "KOTAKBANK.NS", "LT.NS",
-    "LTIM.NS", "M&M.NS", "MARUTI.NS", "NTPC.NS", "NESTLEIND.NS",
-    "ONGC.NS", "POWERGRID.NS", "RELIANCE.NS", "SBILIFE.NS", "SBIN.NS",
-    "SUNPHARMA.NS", "TATAMOTORS.NS", "TATASTEEL.NS", "TATACONSUM.NS", "TCS.NS",
-    "TECHM.NS", "TITAN.NS", "ULTRACEMCO.NS", "WIPRO.NS", "TRENT.NS"
-]
+import io
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from airflow.exceptions import AirflowSkipException
 
-NIFTY_MIDCAP_SYMBOLS = [
-    "FEDERALBNK.NS", "VOLTAS.NS", "PAGEIND.NS", "OFSS.NS", "AUBANK.NS",
-    "CGPOWER.NS", "CUMMINSIND.NS", "DIXON.NS", "ESCORTS.NS", "IDFCFIRSTB.NS",
-    "LUPIN.NS", "MRF.NS", "OBEROIRLTY.NS", "PATANJALI.NS", "POLYCAB.NS",
-    "TATACOMM.NS", "TVSMOTOR.NS", "UBL.NS", "GODREJPROP.NS", "INDHOTEL.NS"
-]
+def get_nse_index_symbols(index_name):
+    """
+    Dynamically fetches the latest constituents for an NSE index directly from the National Stock Exchange.
+    """
+    url_map = {
+        "nifty50": "ind_nifty50list.csv",
+        "nifty_midcap": "ind_niftymidcap150list.csv",
+        "nifty_smallcap": "ind_niftysmallcap250list.csv"
+    }
+    
+    if index_name not in url_map:
+        raise ValueError(f"Unknown index {index_name}")
+        
+    url = f"https://archives.nseindia.com/content/indices/{url_map[index_name]}"
+    
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception_type(requests.exceptions.RequestException)
+    )
+    def fetch_nse():
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.text
 
-NIFTY_SMALLCAP_SYMBOLS = [
-    "SUZLON.NS", "CDSL.NS", "HFCL.NS", "ANGELONE.NS", "BSE.NS",
-    "CAMPUS.NS", "CHALET.NS", "CYIENT.NS", "RADICO.NS", "SONACOMS.NS",
-    "APARINDS.NS", "CEATLTD.NS", "GLENMARK.NS", "IRB.NS", "JYOTHYLAB.NS",
-    "MULTIBASE.NS", "PVRINOX.NS", "RITES.NS", "TATAINVEST.NS", "UTIAMC.NS"
-]
+    try:
+        # NSE blocks requests without a User-Agent
+        csv_text = fetch_nse()
+        
+        df = pd.read_csv(io.StringIO(csv_text))
+        # The column is usually 'Symbol', add .NS suffix for Yahoo Finance
+        symbols = [f"{sym}.NS" for sym in df['Symbol'].tolist()]
+        logger.info(f"Successfully fetched {len(symbols)} dynamic symbols for {index_name} from NSE.")
+        return symbols
+    except Exception as e:
+        logger.error(f"Failed to fetch dynamic symbols for {index_name} from NSE: {e}")
+        # Return fallback lists just in case NSE site is down
+        fallbacks = {
+            "nifty50": ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"],
+            "nifty_midcap": ["FEDERALBNK.NS", "VOLTAS.NS", "PAGEIND.NS", "OFSS.NS", "AUBANK.NS"],
+            "nifty_smallcap": ["SUZLON.NS", "CDSL.NS", "HFCL.NS", "ANGELONE.NS", "BSE.NS"]
+        }
+        return fallbacks[index_name]
 
 def get_db_connection():
     return psycopg2.connect(
@@ -55,7 +76,7 @@ def get_db_connection():
 
 def ensure_table_exists(table_name):
     query = f"""
-    CREATE TABLE IF NOT EXISTS public.{table_name} (
+    CREATE TABLE IF NOT EXISTS bronze.{table_name} (
         id SERIAL PRIMARY KEY,
         symbol VARCHAR(50) NOT NULL,
         asset_name VARCHAR(255),
@@ -90,7 +111,7 @@ def ingest_index(symbols, table_name, start_date=None):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT symbol, MAX(event_time) FROM public.{table_name} GROUP BY symbol;")
+                cur.execute(f"SELECT symbol, MAX(event_time) FROM bronze.{table_name} GROUP BY symbol;")
                 for row in cur.fetchall():
                     latest_dates[row[0]] = row[1]
     except Exception as e:
@@ -117,7 +138,11 @@ def ingest_index(symbols, table_name, start_date=None):
             else:
                 hist = ticker.history(period="1mo")
             
+            # Drop rows with NaN values before iterating
+            hist = hist.dropna(subset=['Open', 'High', 'Low', 'Close'])
+
             for index, row in hist.iterrows():
+                # Provide a fallback to 0.0 for volume, but ensure prices are valid floats
                 all_records.append((
                     symbol,
                     asset_name,
@@ -126,7 +151,7 @@ def ingest_index(symbols, table_name, start_date=None):
                     float(row['High']),
                     float(row['Low']),
                     float(row['Close']),
-                    float(row['Volume'])
+                    float(row['Volume']) if pd.notna(row['Volume']) else 0.0
                 ))
                 
             # Rate limit mitigation for Yahoo Finance
@@ -139,7 +164,7 @@ def ingest_index(symbols, table_name, start_date=None):
         return
 
     insert_query = f"""
-        INSERT INTO public.{table_name} (symbol, asset_name, event_time, open, high, low, close, volume)
+        INSERT INTO bronze.{table_name} (symbol, asset_name, event_time, open, high, low, close, volume)
         VALUES %s
         ON CONFLICT (symbol, event_time) DO UPDATE SET asset_name = EXCLUDED.asset_name;
     """
@@ -155,13 +180,16 @@ def ingest_index(symbols, table_name, start_date=None):
         raise
 
 def ingest_nifty50():
-    ingest_index(NIFTY_50_SYMBOLS, "nifty50_price_raw", start_date="2016-01-01")
+    symbols = get_nse_index_symbols("nifty50")
+    ingest_index(symbols, "nifty50_price_raw", start_date="2016-01-01")
 
 def ingest_nifty_midcap():
-    ingest_index(NIFTY_MIDCAP_SYMBOLS, "nifty_midcap_price_raw", start_date="2016-01-01")
+    symbols = get_nse_index_symbols("nifty_midcap")
+    ingest_index(symbols, "nifty_midcap_price_raw", start_date="2016-01-01")
 
 def ingest_nifty_smallcap():
-    ingest_index(NIFTY_SMALLCAP_SYMBOLS, "nifty_smallcap_price_raw", start_date="2016-01-01")
+    symbols = get_nse_index_symbols("nifty_smallcap")
+    ingest_index(symbols, "nifty_smallcap_price_raw", start_date="2016-01-01")
 
 if __name__ == "__main__":
     import sys

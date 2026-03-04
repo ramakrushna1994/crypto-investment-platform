@@ -11,6 +11,8 @@ import time
 from psycopg2.extras import execute_values
 from datetime import datetime
 from src.config.settings import POSTGRES
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from airflow.exceptions import AirflowSkipException
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -125,7 +127,8 @@ def ingest_mutual_funds(max_workers: int = 20):
     cur  = conn.cursor()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS public.mutual_funds_price_raw (
+        CREATE TABLE IF NOT EXISTS bronze.mutual_funds_price_raw (
+            id         SERIAL PRIMARY KEY,
             symbol     TEXT,
             asset_name TEXT,
             event_time DATE,
@@ -134,14 +137,14 @@ def ingest_mutual_funds(max_workers: int = 20):
             low        NUMERIC,
             close      NUMERIC,
             volume     BIGINT,
-            PRIMARY KEY (symbol, event_time)
+            UNIQUE (symbol, event_time)
         )
     """)
     conn.commit()
 
     # Latest date per symbol for incremental loading
     cur.execute("""
-        SELECT symbol, MAX(event_time) FROM public.mutual_funds_price_raw GROUP BY symbol
+        SELECT symbol, MAX(event_time) FROM bronze.mutual_funds_price_raw GROUP BY symbol
     """)
     latest_dates = {row[0]: row[1] for row in cur.fetchall()}
 
@@ -154,9 +157,17 @@ def ingest_mutual_funds(max_workers: int = 20):
         sym   = f"MF{code}"
         last  = latest_dates.get(sym)
         records = fetch_nav_history(code, name)
-        if records and last:
-            last_date = last.date() if hasattr(last, 'date') else last
-            records = [r for r in records if r["event_time"] > last_date]
+        
+        if records:
+            if last:
+                last_date = last.date() if hasattr(last, 'date') else last
+                records = [r for r in records if r["event_time"] > last_date]
+            else:
+                # Enforce the global start date of 2016-01-01 for new funds
+                import datetime
+                cutoff = datetime.date(2016, 1, 1)
+                records = [r for r in records if r["event_time"] >= cutoff]
+                
         return records
 
     all_results = []  # list of (records_list,)
@@ -179,7 +190,7 @@ def ingest_mutual_funds(max_workers: int = 20):
             r["open"], r["high"], r["low"], r["close"], r["volume"]
         ) for r in records]
         execute_values(cur, """
-            INSERT INTO public.mutual_funds_price_raw
+            INSERT INTO bronze.mutual_funds_price_raw
                 (symbol, asset_name, event_time, open, high, low, close, volume)
             VALUES %s
             ON CONFLICT (symbol, event_time) DO UPDATE SET

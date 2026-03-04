@@ -1,0 +1,48 @@
+name: CI – Lint & Test
+
+on:
+  push:
+    branches: [main, sit, dev]
+  pull_request:
+    branches: [main, sit]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/ -v --tb=short --co -q  # dry-run to verify collection
+          pytest tests/ -v --tb=short --cov=src --cov-report=term-missing
+
+      - name: Fail if coverage below 50%
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/ --cov=src --cov-fail-under=50 -q
