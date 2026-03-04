@@ -25,8 +25,9 @@ This is educational tooling, not financial advice.
   - `NSE + yfinance` (Nifty 50 / Midcap / Smallcap)
   - `MFAPI` (mutual fund NAV history)
 - Distributed feature engineering with PySpark technical indicators.
-- Dual-horizon model training (`1y`, `5y`) using RandomForest.
+- Dual-horizon model training (`1y`, `5y`) with CPU-friendly candidate selection (`histgb`, `rf`, `logreg`), calibration, and optional ensemble artifacts.
 - Signal generation with probability-to-label business mapping.
+- Walk-forward model validation with threshold sweeps, regime analytics, and feature drift diagnostics.
 - Auditing framework:
   - ETL start/end logging
   - source-target reconciliation
@@ -104,7 +105,21 @@ graph TD
   - `signal`, `confidence` (primary 1-year view)
   - `signal_1y`, `confidence_1y`
   - `signal_5y`, `confidence_5y`
+  - risk fields: `risk_score`, `risk_bucket`, `suggested_position_pct`, `var_95_1d`, `cvar_95_1d`
 - `audit.*`: ETL logs, reconciliation, and quality metrics.
+
+## Model Artifact Format
+- Trained artifacts are saved under `/opt/airflow/models/` as `*_model.joblib`.
+- Each joblib payload is version-tolerant and can be:
+  - `single` model artifact (`model`, optional `calibrator`, metadata), or
+  - `ensemble` artifact (`models[]` with weights + calibrators, metadata).
+- Companion metrics are saved as `*_metrics.json` and include:
+  - data quality gate results (`schema_check`, `freshness_check`, outlier rates),
+  - candidate leaderboard + selected model(s),
+  - evaluation metrics (`eval_roc_auc`, `eval_f1`, `eval_brier`).
+- Lightweight experiment tracking files:
+  - `/opt/airflow/models/experiments/training_runs.jsonl`
+  - `/opt/airflow/models/experiments/model_registry.json`
 
 ## Quickstart
 Prerequisites:
@@ -121,6 +136,12 @@ docker compose up -d --build
 2. Configure secrets via `.env` (do not commit this file):
 - Postgres credentials
 - SMTP settings (`SMTP_USER`, `SMTP_PASSWORD`, `RECEIVER_EMAIL`, etc.)
+- Model/training guardrails (optional overrides):
+  - `AIQ_MAX_TRAIN_ROWS`, `AIQ_CANDIDATE_SAMPLE_ROWS`
+  - `AIQ_MIN_TRAIN_ROWS`, `AIQ_MIN_SYMBOLS`
+  - `AIQ_MIN_POS_RATE`, `AIQ_MAX_POS_RATE`
+  - `AIQ_MAX_OUTLIER_RATE`, `AIQ_MAX_SOURCE_AGE_DAYS`
+  - `AIQ_CALIBRATION_FRACTION`, `AIQ_MODEL_CANDIDATES`, `AIQ_ENABLE_ENSEMBLE`
 
 3. Trigger first run:
 - Open Airflow: `http://localhost:8080` (default local auth: `admin/admin`)
@@ -133,6 +154,38 @@ docker compose up -d --build
 ```bash
 curl "http://localhost:8000/api/v1/signals/mutual_funds?min_confidence=0.7&limit=10"
 ```
+- Validation summary API:
+```bash
+curl "http://localhost:8000/api/v1/validation/summary?asset_class=crypto"
+```
+
+## Validation Outputs
+- Walk-forward outputs are written to `/opt/airflow/files/reports`:
+  - `*_walk_forward_summary.json`
+  - `*_walk_forward_splits.csv`
+  - `*_walk_forward_buckets.csv`
+  - `*_walk_forward_thresholds.csv`
+  - `*_walk_forward_model_compare.csv`
+  - `*_walk_forward_regimes.csv`
+  - `*_walk_forward_drift.csv`
+- Validation DAG kwargs now explicitly include:
+  - cost/friction knobs (`trading_cost_bps`, `slippage_bps`, `brokerage_bps`, `tax_bps`)
+  - drift windows (`drift_recent_days`, `drift_baseline_days`, `drift_min_samples`)
+- Reliability guardrails in validation DAGs:
+  - per-task `execution_timeout`
+  - DAG-level `dagrun_timeout`
+  - automatic retries with backoff delay
+  - terminal report-freshness check task that fails on missing/stale/corrupt walk-forward artifacts
+
+## Accuracy Guardrails (Daily Publish)
+- Daily pipeline now runs two guard tasks before signal publish for each asset class:
+  - `freshness_sla_*`: fails fast when silver feature table is stale or too small.
+  - `promotion_gate_*`: blocks signal publish unless latest walk-forward report passes quality thresholds.
+- Promotion thresholds (env-configurable):
+  - `AIQ_PROMOTION_MIN_AVG_ROC_AUC` (default `0.55`)
+  - `AIQ_PROMOTION_MIN_AVG_F1` (default `0.40`)
+  - `AIQ_PROMOTION_MAX_HIGH_DRIFT_FEATURES` (default `10`)
+  - `AIQ_PROMOTION_REQUIRE_DRIFT_OK` (default `true`)
 
 ## Product Strategy: How We Reciprocate To The Tech Community
 We want this to be a community product, not just a code dump. Our reciprocity model:

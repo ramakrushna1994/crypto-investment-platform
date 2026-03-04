@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sqlalchemy import create_engine, text
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -7,6 +8,8 @@ from email.mime.text import MIMEText
 from email import encoders
 import os
 import logging
+import json
+from pathlib import Path
 from src.config.settings import POSTGRES
 
 logger = logging.getLogger(__name__)
@@ -49,6 +52,221 @@ def table_has_column(engine, table_name: str, column_name: str) -> bool:
         return False
 
 
+def load_walk_forward_validation_summary(tabs, reports_dir="/opt/airflow/files/reports"):
+    """
+    Build a flat summary DataFrame from walk-forward JSON outputs.
+    One row per asset class + horizon.
+    """
+    def _summarize_regimes(regime_rows):
+        if not regime_rows:
+            return {}
+        rdf = pd.DataFrame(regime_rows)
+        if rdf.empty or "regime" not in rdf.columns:
+            return {}
+        required = {"samples", "hit_rate", "avg_return", "avg_benchmark_return"}
+        if not required.issubset(set(rdf.columns)):
+            return {}
+
+        for col in ["samples", "hit_rate", "avg_return", "avg_benchmark_return"]:
+            if col in rdf.columns:
+                rdf[col] = pd.to_numeric(rdf[col], errors="coerce")
+
+        out = {}
+        for regime in ("bull", "bear", "sideways"):
+            subset = rdf[rdf["regime"] == regime].copy()
+            if subset.empty:
+                continue
+
+            weights = subset.get("samples", pd.Series(dtype=float)).fillna(0).clip(lower=0)
+            weight_sum = float(weights.sum())
+            if weight_sum > 0:
+                hit_rate = float(np.average(subset["hit_rate"].fillna(0.0), weights=weights))
+                avg_return = float(np.average(subset["avg_return"].fillna(0.0), weights=weights))
+                avg_benchmark = float(np.average(subset["avg_benchmark_return"].fillna(0.0), weights=weights))
+            else:
+                hit_rate = float(subset["hit_rate"].mean(skipna=True))
+                avg_return = float(subset["avg_return"].mean(skipna=True))
+                avg_benchmark = float(subset["avg_benchmark_return"].mean(skipna=True))
+
+            out[f"{regime}_samples"] = int(weights.sum())
+            out[f"{regime}_hit_rate"] = hit_rate
+            out[f"{regime}_avg_return"] = avg_return
+            out[f"{regime}_avg_benchmark_return"] = avg_benchmark
+        return out
+
+    rows = []
+    report_root = Path(reports_dir)
+    for asset_class, (_, features_table) in tabs.items():
+        safe_table = features_table.replace(".", "_")
+        summary_path = report_root / f"{safe_table}_walk_forward_summary.json"
+        if not summary_path.exists():
+            rows.append(
+                {
+                    "asset_class": asset_class,
+                    "source_table": features_table,
+                    "horizon": "n/a",
+                    "status": "missing_report",
+                }
+            )
+            continue
+
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            rows.append(
+                {
+                    "asset_class": asset_class,
+                    "source_table": features_table,
+                    "horizon": "n/a",
+                    "status": "report_parse_failed",
+                    "error": str(e),
+                }
+            )
+            continue
+
+        generated_utc = pd.Timestamp(summary_path.stat().st_mtime, unit="s", tz="UTC").strftime(
+            "%Y-%m-%d %H:%M:%S UTC"
+        )
+        horizons = payload.get("horizons", [])
+        if not horizons:
+            rows.append(
+                {
+                    "asset_class": asset_class,
+                    "source_table": features_table,
+                    "horizon": "n/a",
+                    "status": "no_horizons",
+                    "report_generated_utc": generated_utc,
+                }
+            )
+            continue
+
+        for horizon_data in horizons:
+            summary = horizon_data.get("summary", {})
+            drift_summary = horizon_data.get("drift_summary", {}) or {}
+            regime_summary = _summarize_regimes(horizon_data.get("regime_rows", []))
+            rows.append(
+                {
+                    "asset_class": asset_class,
+                    "source_table": features_table,
+                    "horizon": horizon_data.get("horizon", "n/a"),
+                    "status": horizon_data.get("status", "unknown"),
+                    "selected_model_type": horizon_data.get("selected_model_type"),
+                    "recommended_min_prob": horizon_data.get("recommended_min_prob"),
+                    "splits_ran": summary.get("splits_ran"),
+                    "avg_roc_auc": summary.get("avg_roc_auc"),
+                    "avg_f1": summary.get("avg_f1"),
+                    "avg_brier": summary.get("avg_brier"),
+                    "avg_cagr_approx": summary.get("avg_cagr_approx"),
+                    "avg_sharpe_annualized": summary.get("avg_sharpe_annualized"),
+                    "avg_max_drawdown": summary.get("avg_max_drawdown"),
+                    "avg_hit_rate": summary.get("avg_hit_rate"),
+                    "drift_status": horizon_data.get("drift_status"),
+                    "drift_avg_psi": drift_summary.get("avg_psi"),
+                    "drift_avg_ks": drift_summary.get("avg_ks"),
+                    "drift_high_features": drift_summary.get("high_drift_features"),
+                    "drift_medium_features": drift_summary.get("medium_drift_features"),
+                    "drift_recent_start": drift_summary.get("recent_start"),
+                    "drift_recent_end": drift_summary.get("recent_end"),
+                    "report_generated_utc": generated_utc,
+                    **regime_summary,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(rows)
+    preferred_order = [
+        "asset_class",
+        "source_table",
+        "horizon",
+        "status",
+        "selected_model_type",
+        "recommended_min_prob",
+        "splits_ran",
+        "avg_roc_auc",
+        "avg_f1",
+        "avg_brier",
+        "avg_cagr_approx",
+        "avg_sharpe_annualized",
+        "avg_max_drawdown",
+        "avg_hit_rate",
+        "drift_status",
+        "drift_avg_psi",
+        "drift_avg_ks",
+        "drift_high_features",
+        "drift_medium_features",
+        "drift_recent_start",
+        "drift_recent_end",
+        "bull_samples",
+        "bull_hit_rate",
+        "bull_avg_return",
+        "bull_avg_benchmark_return",
+        "bear_samples",
+        "bear_hit_rate",
+        "bear_avg_return",
+        "bear_avg_benchmark_return",
+        "sideways_samples",
+        "sideways_hit_rate",
+        "sideways_avg_return",
+        "sideways_avg_benchmark_return",
+        "report_generated_utc",
+        "error",
+    ]
+    final_cols = [c for c in preferred_order if c in out.columns] + [c for c in out.columns if c not in preferred_order]
+    return out[final_cols]
+
+
+def build_validation_email_section(validation_df: pd.DataFrame) -> str:
+    if validation_df.empty:
+        return "Model Validation Snapshot: Not available."
+
+    def _fmt_pct(value, decimals=1):
+        return f"{float(value) * 100:.{decimals}f}%" if pd.notna(value) else "n/a"
+
+    def _fmt_num(value, decimals=3):
+        return f"{float(value):.{decimals}f}" if pd.notna(value) else "n/a"
+
+    lines = ["Model Validation Snapshot (walk-forward):"]
+    for _, row in validation_df.sort_values(["asset_class", "horizon"]).iterrows():
+        asset_class = row.get("asset_class", "Unknown")
+        horizon = row.get("horizon", "n/a")
+        status = row.get("status", "unknown")
+        if status != "ok":
+            lines.append(f"- {asset_class} [{horizon}]: status={status}")
+            continue
+
+        model = row.get("selected_model_type", "n/a")
+        threshold = row.get("recommended_min_prob")
+        threshold_txt = _fmt_pct(threshold, decimals=0)
+        roc_auc = row.get("avg_roc_auc")
+        f1 = row.get("avg_f1")
+        splits = row.get("splits_ran")
+        roc_auc_txt = _fmt_num(roc_auc, decimals=3)
+        f1_txt = _fmt_num(f1, decimals=3)
+        splits_txt = str(int(splits)) if pd.notna(splits) else "n/a"
+        drift_status = row.get("drift_status", "n/a")
+        drift_high = row.get("drift_high_features")
+        drift_medium = row.get("drift_medium_features")
+        drift_txt = (
+            f"{drift_status} (high={int(drift_high) if pd.notna(drift_high) else 'n/a'}, "
+            f"medium={int(drift_medium) if pd.notna(drift_medium) else 'n/a'})"
+        )
+        regime_txt = (
+            f"hit-rate bull/bear/sideways="
+            f"{_fmt_pct(row.get('bull_hit_rate'))}/"
+            f"{_fmt_pct(row.get('bear_hit_rate'))}/"
+            f"{_fmt_pct(row.get('sideways_hit_rate'))}"
+        )
+        lines.append(
+            f"- {asset_class} [{horizon}]: model={model}, threshold={threshold_txt}, "
+            f"ROC-AUC={roc_auc_txt}, F1={f1_txt}, splits={splits_txt}, "
+            f"drift={drift_txt}, {regime_txt}"
+        )
+
+    return "\n".join(lines)
+
+
 def fetch_and_filter_data(engine, signals_table, features_table):
     # if either source or features table is missing, treat as empty
     if not table_exists(engine, signals_table):
@@ -66,7 +284,7 @@ def fetch_and_filter_data(engine, signals_table, features_table):
         else "s.symbol AS asset_name,"
     )
     query = f"""
-        SELECT s.*, {asset_select} f.close, f.rsi_14, f.volatility_7d 
+        SELECT s.*, {asset_select} f.close, f.rsi_14, f.volatility_7d, f.atr_14
         FROM (SELECT DISTINCT ON (symbol) * FROM {signals_table} ORDER BY symbol, trade_date DESC) s
         JOIN (SELECT DISTINCT ON (symbol) * FROM {features_table} ORDER BY symbol, event_time DESC) f
         ON s.symbol = f.symbol
@@ -91,6 +309,13 @@ def fetch_and_filter_data(engine, signals_table, features_table):
         mask = mask | df['signal'].isin(target_signals)
         
     filtered = df[mask].copy()
+    if not filtered.empty:
+        if 'risk_adjusted_score' in filtered.columns:
+            filtered = filtered.sort_values('risk_adjusted_score', ascending=False, na_position='last')
+        elif 'confidence_1y' in filtered.columns:
+            filtered = filtered.sort_values('confidence_1y', ascending=False, na_position='last')
+        elif 'confidence' in filtered.columns:
+            filtered = filtered.sort_values('confidence', ascending=False, na_position='last')
     
     # Organize columns
     cols_to_keep = ['asset_name']
@@ -101,13 +326,28 @@ def fetch_and_filter_data(engine, signals_table, features_table):
         cols_to_keep.extend(['signal_5y', 'confidence_5y'])
     if 'signal' in df.columns and 'confidence' in df.columns:
         cols_to_keep.extend(['signal', 'confidence'])
-        
-    cols_to_keep.extend(['close', 'rsi_14', 'volatility_7d'])
+
+    for risk_col in [
+        'combined_confidence',
+        'risk_bucket',
+        'risk_score',
+        'suggested_position_pct',
+        'expected_return_1y',
+        'risk_adjusted_score',
+        'var_95_1d',
+        'cvar_95_1d',
+    ]:
+        if risk_col in df.columns:
+            cols_to_keep.append(risk_col)
+
+    cols_to_keep.extend(['close', 'rsi_14', 'volatility_7d', 'atr_14'])
     
-    return filtered[cols_to_keep] if not filtered.empty else pd.DataFrame()
+    available_cols = [c for c in cols_to_keep if c in filtered.columns]
+    return filtered[available_cols] if not filtered.empty else pd.DataFrame()
 
 
-def write_excel_report(engine, tabs, filepath):
+def write_excel_report(engine, tabs, filepath, validation_df=None):
+    validation_df = validation_df if validation_df is not None else load_walk_forward_validation_summary(tabs)
     with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
         for tab_name, (sig_tbl, feat_tbl) in tabs.items():
             try:
@@ -119,6 +359,13 @@ def write_excel_report(engine, tabs, filepath):
             except Exception as e:
                 logger.error(f"Error processing {tab_name}: {e}")
                 pd.DataFrame({'Error': [str(e)]}).to_excel(writer, sheet_name=tab_name, index=False)
+
+        if validation_df.empty:
+            pd.DataFrame(
+                {"Message": ["No validation summary available. Run ai_quant_model_validation_weekly."]}
+            ).to_excel(writer, sheet_name="Validation Summary", index=False)
+        else:
+            validation_df.to_excel(writer, sheet_name="Validation Summary", index=False)
 
     # after writing, apply conditional formatting based on signal columns
     from openpyxl.styles import PatternFill
@@ -134,7 +381,7 @@ def write_excel_report(engine, tabs, filepath):
         for colcell in ws[1]:
             if colcell.value in {'signal', 'signal_1y', 'signal_5y'}:
                 signal_col_letters.append(colcell.column_letter)
-            if colcell.value in {'confidence', 'confidence_1y', 'confidence_5y'}:
+            if colcell.value in {'confidence', 'confidence_1y', 'confidence_5y', 'combined_confidence', 'suggested_position_pct', 'expected_return_1y', 'var_95_1d', 'cvar_95_1d'}:
                 confidence_col_letters.append(colcell.column_letter)
         if signal_col_letters and ws.max_row >= 2:
             # apply fill to entire row when any signal column is INVEST NOW
@@ -155,6 +402,34 @@ def write_excel_report(engine, tabs, filepath):
                     cell = ws[f"{col}{row_idx}"]
                     if isinstance(cell.value, (int, float)):
                         cell.number_format = "0.00%"
+        if ws.max_row >= 2:
+            for colcell in ws[1]:
+                if colcell.value in {
+                    "recommended_min_prob",
+                    "avg_hit_rate",
+                    "avg_cagr_approx",
+                    "avg_max_drawdown",
+                    "bull_hit_rate",
+                    "bear_hit_rate",
+                    "sideways_hit_rate",
+                    "bull_avg_return",
+                    "bear_avg_return",
+                    "sideways_avg_return",
+                    "bull_avg_benchmark_return",
+                    "bear_avg_benchmark_return",
+                    "sideways_avg_benchmark_return",
+                }:
+                    col = colcell.column_letter
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws[f"{col}{row_idx}"]
+                        if isinstance(cell.value, (int, float)):
+                            cell.number_format = "0.00%"
+                if colcell.value in {"risk_score"}:
+                    col = colcell.column_letter
+                    for row_idx in range(2, ws.max_row + 1):
+                        cell = ws[f"{col}{row_idx}"]
+                        if isinstance(cell.value, (int, float)):
+                            cell.number_format = "0.0"
     wb.save(filepath)
 
 def send_opportunity_email():
@@ -171,14 +446,16 @@ def send_opportunity_email():
     
     filepath = "/opt/airflow/files/investment_opportunities.xlsx"
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    validation_df = load_walk_forward_validation_summary(tabs)
+    validation_snapshot = build_validation_email_section(validation_df)
 
     try:
-        write_excel_report(engine, tabs, filepath)
+        write_excel_report(engine, tabs, filepath, validation_df=validation_df)
     except PermissionError:
         fallback_filepath = f"/opt/airflow/files/investment_opportunities_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         logger.warning(f"Permission denied for {filepath}; retrying with {fallback_filepath}")
         try:
-            write_excel_report(engine, tabs, fallback_filepath)
+            write_excel_report(engine, tabs, fallback_filepath, validation_df=validation_df)
             filepath = fallback_filepath
         except Exception as e:
             logger.error(f"Failed to create Excel file after fallback: {e}")
@@ -231,7 +508,9 @@ def send_opportunity_email():
     msg['To'] = receiver_display
     msg['Subject'] = "Daily AI Investment Opportunities | Crypto & Nifty Market Signals"
     
-    body = """Attached is the latest daily report for assets marked 'INVEST NOW' or 'ACCUMULATE'.
+    body = f"""Attached is the latest daily report for assets marked 'INVEST NOW' or 'ACCUMULATE'.
+
+{validation_snapshot}
 
 Disclaimer: This is not investment advice and is created for educational purposes only. Please consult a qualified financial advisor before making any investment decisions. Use this information at your own risk.
 
@@ -256,6 +535,8 @@ Disclaimer: This is not investment advice and is created for educational purpose
         logger.info(f"Email sent successfully to {receiver_display}.")
     except Exception as e:
         logger.error(f"Failed to send email: {e}")
+    finally:
+        engine.dispose()
 
 if __name__ == '__main__':
     send_opportunity_email()

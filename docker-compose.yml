@@ -28,7 +28,8 @@ x-airflow-common: &airflow-common
     - ./files:/opt/airflow/files
 
   depends_on:
-    - postgres
+    postgres:
+      condition: service_healthy
 
 services:
   postgres:
@@ -43,6 +44,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ai_quant -d ai_quant" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   airflow-init:
     <<: *airflow-common
@@ -67,6 +74,12 @@ services:
         condition: service_completed_successfully
     mem_limit: 6g
     memswap_limit: 6g
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   airflow-dag-processor:
     <<: *airflow-common
@@ -97,10 +110,17 @@ services:
       - ./streamlit_app:/app/streamlit_app
       - ./src:/app/src
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     environment:
       TZ: Asia/Kolkata
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8501/_stcore/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   api:
     build:
@@ -112,11 +132,19 @@ services:
     volumes:
       - ./api:/app/api
       - ./src:/app/src
+      - ./files:/opt/airflow/files
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     environment:
       TZ: Asia/Kolkata
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/docs || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   ollama:
     image: ollama/ollama:latest
@@ -126,12 +154,19 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   ollama-init:
     image: curlimages/curl:latest
     container_name: ai-quant-ollama-init
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     command: >
       sh -c "
         echo 'Waiting for Ollama to start...' &&

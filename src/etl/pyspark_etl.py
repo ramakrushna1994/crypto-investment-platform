@@ -4,6 +4,7 @@ pyspark_etl.py
 Distributed Data Engineering ETL pipeline using Apache Spark.
 Computes 15+ technical indicators on high-volume financial time series data.
 """
+import os
 import sys
 import logging
 from pyspark.sql import SparkSession
@@ -11,30 +12,92 @@ from pyspark.sql.window import Window
 import pyspark.sql.functions as F
 from pyspark.sql.types import DoubleType
 
-from src.config.settings import POSTGRES
+from src.config.settings import POSTGRES, validate_table_name
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
+def _prepare_spark_eventlog_dir():
+    """
+    Ensure Spark event log directory exists before SparkContext starts.
+    Falls back to /tmp if mounted logs path is unavailable.
+    """
+    preferred = os.getenv("SPARK_EVENTLOG_DIR", "/opt/airflow/logs/spark-events")
+    for path in [preferred, "/tmp/spark-events"]:
+        try:
+            os.makedirs(path, exist_ok=True)
+            return True, f"file://{path}"
+        except OSError as e:
+            logger.warning(f"Unable to prepare Spark event log dir at {path}: {e}")
+    return False, ""
+
+
+def add_ema_column(df, value_col: str, span: int, out_col: str):
+    """
+    Add an EMA column using the recursive EMA definition (adjust=False):
+        EMA_t = alpha * X_t + (1-alpha) * EMA_{t-1}, EMA_0 = X_0
+
+    Closed-form implemented with window ops (per symbol, ordered by event_time)
+    to avoid Python UDF overhead and keep execution distributed.
+    """
+    alpha = 2.0 / (span + 1.0)
+    beta = 1.0 - alpha
+
+    w_ordered = Window.partitionBy("symbol").orderBy("event_time")
+    w_cum = w_ordered.rowsBetween(Window.unboundedPreceding, 0)
+
+    rn_col = f"__ema_rn_{out_col}"
+    first_col = f"__ema_first_{out_col}"
+    term_col = f"__ema_term_{out_col}"
+    cum_col = f"__ema_cum_{out_col}"
+
+    return (
+        df.withColumn(rn_col, F.row_number().over(w_ordered) - 1)
+        .withColumn(first_col, F.first(F.col(value_col), ignorenulls=True).over(w_cum))
+        .withColumn(
+            term_col,
+            F.when(
+                F.col(rn_col) > 0,
+                F.col(value_col) * F.pow(F.lit(beta), -F.col(rn_col))
+            ).otherwise(F.lit(0.0))
+        )
+        .withColumn(cum_col, F.sum(F.col(term_col)).over(w_cum))
+        .withColumn(
+            out_col,
+            F.pow(F.lit(beta), F.col(rn_col)) *
+            (F.col(first_col) + F.lit(alpha) * F.col(cum_col))
+        )
+        .drop(rn_col, first_col, term_col, cum_col)
+    )
+
+
 def create_spark_session(app_name="CryptoETL"):
     """Initialize a local Spark Session optimized for Docker environments."""
-    return (SparkSession.builder
-            .appName(app_name)
-            .config("spark.driver.memory", "2g")
-            .config("spark.executor.memory", "3g")
-            .config("spark.network.timeout", "900s")
-            .config("spark.executor.heartbeatInterval", "180s")
-            .config("spark.sql.shuffle.partitions", "20")
-            .config("spark.sql.adaptive.enabled", "true")
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
-            .config("spark.jars", "/opt/airflow/jars/postgresql-42.7.3.jar")
-            .config("spark.eventLog.enabled", "true")
-            .config("spark.eventLog.dir", "file:///opt/airflow/logs/spark-events")
-            # Reduce memory overhead for large datasets
-            .config("spark.memory.fraction", "0.8")
-            .config("spark.memory.storageFraction", "0.3")
-            .getOrCreate())
+    eventlog_enabled, eventlog_uri = _prepare_spark_eventlog_dir()
+    builder = (
+        SparkSession.builder
+        .appName(app_name)
+        .config("spark.driver.memory", "2g")
+        .config("spark.executor.memory", "3g")
+        .config("spark.network.timeout", "900s")
+        .config("spark.executor.heartbeatInterval", "180s")
+        .config("spark.sql.shuffle.partitions", "20")
+        .config("spark.sql.adaptive.enabled", "true")
+        .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        .config("spark.jars", "/opt/airflow/jars/postgresql-42.7.3.jar")
+        # Reduce memory overhead for large datasets
+        .config("spark.memory.fraction", "0.8")
+        .config("spark.memory.storageFraction", "0.3")
+    )
+
+    if eventlog_enabled:
+        builder = builder.config("spark.eventLog.enabled", "true").config("spark.eventLog.dir", eventlog_uri)
+    else:
+        logger.warning("Spark event logging disabled: no writable event log directory found.")
+        builder = builder.config("spark.eventLog.enabled", "false")
+
+    return builder.getOrCreate()
 
 
 def get_postgres_properties():
@@ -57,13 +120,10 @@ def compute_indicators(df):
     # 1. Define window specifications
     w_symbol_time = Window.partitionBy("symbol").orderBy("event_time")
     
-    # Simple Moving Averages (SMA) bounds
+    # Rolling bounds
     w_7  = w_symbol_time.rowsBetween(-6, 0)
-    w_9  = w_symbol_time.rowsBetween(-8, 0)
-    w_12 = w_symbol_time.rowsBetween(-11, 0)
     w_14 = w_symbol_time.rowsBetween(-13, 0)
     w_20 = w_symbol_time.rowsBetween(-19, 0)
-    w_26 = w_symbol_time.rowsBetween(-25, 0)
     w_50 = w_symbol_time.rowsBetween(-49, 0)
     w_200 = w_symbol_time.rowsBetween(-199, 0)
 
@@ -79,13 +139,15 @@ def compute_indicators(df):
            .withColumn("sma_200", sma_200) \
            .withColumn("moving_avg_7d", F.mean("close").over(w_7)) \
            .withColumn("volatility_7d", F.stddev("close").over(w_7)) \
-           .withColumn("ema_20", sma_20) \
-           .withColumn("macd", F.mean("close").over(w_12) - F.mean("close").over(w_26)) \
            .withColumn("bb_upper", sma_20 + (F.lit(2) * std_20)) \
-           .withColumn("bb_lower", sma_20 - (F.lit(2) * std_20))
-    
-    # Compute MACD signal in single pass
-    df = df.withColumn("macd_signal", F.mean("macd").over(w_9))
+            .withColumn("bb_lower", sma_20 - (F.lit(2) * std_20))
+
+    # Use EMA definitions for trend/momentum features.
+    df = add_ema_column(df, "close", 12, "__ema_12")
+    df = add_ema_column(df, "close", 20, "ema_20")
+    df = add_ema_column(df, "close", 26, "__ema_26")
+    df = df.withColumn("macd", F.col("__ema_12") - F.col("__ema_26"))
+    df = add_ema_column(df, "macd", 9, "macd_signal").drop("__ema_12", "__ema_26")
     
     # 3. Compute RSI 14 - delta column for reuse
     delta = F.col("close") - F.lag("close", 1).over(w_symbol_time)
@@ -93,8 +155,13 @@ def compute_indicators(df):
     loss = F.when(delta < 0, -delta).otherwise(0)
     avg_gain = F.mean(gain).over(w_14)
     avg_loss = F.mean(loss).over(w_14)
-    rs = avg_gain / F.when(avg_loss == 0, F.lit(1)).otherwise(avg_loss)
-    df = df.withColumn("rsi_14", 100 - (100 / (1 + rs)))
+    rs = avg_gain / avg_loss
+    df = df.withColumn(
+        "rsi_14",
+        F.when((avg_gain == 0) & (avg_loss == 0), F.lit(50.0))
+        .when(avg_loss == 0, F.lit(100.0))
+        .otherwise(100 - (100 / (1 + rs)))
+    )
 
     # 4. Compute True Range (TR) for ATR
     prev_close = F.lag("close", 1).over(w_symbol_time)
@@ -110,12 +177,98 @@ def compute_indicators(df):
     highest_high = F.max("high").over(w_14)
     
     w_3 = w_symbol_time.rowsBetween(-2, 0)
-    stoch_k = ((F.col("close") - lowest_low) / (highest_high - lowest_low)) * 100
+    stoch_range = highest_high - lowest_low
+    stoch_k = F.when(
+        stoch_range != 0,
+        ((F.col("close") - lowest_low) / stoch_range) * 100
+    ).otherwise(F.lit(50.0))
     df = df.withColumn("stoch_k", stoch_k) \
            .withColumn("stoch_d", F.mean(stoch_k).over(w_3))
 
     # Remove cache after compute to free memory
     df = df.unpersist()
+    return df
+
+# NAV-specific features that supplement standard indicators for mutual funds.
+NAV_FEATURE_COLUMNS = (
+    "rolling_return_30d",
+    "rolling_return_90d",
+    "sortino_30d",
+    "max_drawdown_30d",
+    "nav_momentum_14d",
+)
+
+
+def compute_nav_features(df):
+    """
+    Compute NAV-appropriate features for mutual fund data.
+
+    MF data has open=high=low=close=NAV with volume=0.  While the standard
+    indicators still work (ATR captures |daily change|, Stochastic uses
+    cross-day NAV range), these NAV-specific features capture fund dynamics
+    more effectively: rolling returns, downside risk, drawdown, and momentum.
+    """
+    w_sym = Window.partitionBy("symbol").orderBy("event_time")
+    w_30 = w_sym.rowsBetween(-29, 0)
+    w_14 = w_sym.rowsBetween(-13, 0)
+
+    # ── Rolling Returns ──────────────────────────────────────────────────
+    prev_30 = F.lag("close", 30).over(w_sym)
+    prev_90 = F.lag("close", 90).over(w_sym)
+    df = df.withColumn(
+        "rolling_return_30d",
+        F.when(prev_30 > 0, (F.col("close") / prev_30) - 1).otherwise(F.lit(None)),
+    ).withColumn(
+        "rolling_return_90d",
+        F.when(prev_90 > 0, (F.col("close") / prev_90) - 1).otherwise(F.lit(None)),
+    )
+
+    # ── Daily Return (intermediate) ──────────────────────────────────────
+    prev_close = F.lag("close", 1).over(w_sym)
+    daily_ret_col = "__daily_ret"
+    df = df.withColumn(
+        daily_ret_col,
+        F.when(prev_close > 0, (F.col("close") / prev_close) - 1).otherwise(F.lit(0.0)),
+    )
+
+    # ── Sortino-like Ratio (30d) ─────────────────────────────────────────
+    # Sortino = mean(return) / stddev(negative returns only)
+    downside_col = "__downside_ret"
+    df = df.withColumn(
+        downside_col,
+        F.when(F.col(daily_ret_col) < 0, F.col(daily_ret_col)).otherwise(F.lit(0.0)),
+    )
+    mean_ret_30 = F.mean(daily_ret_col).over(w_30)
+    downside_std_30 = F.stddev(downside_col).over(w_30)
+    df = df.withColumn(
+        "sortino_30d",
+        F.when(
+            (downside_std_30.isNotNull()) & (downside_std_30 > 1e-8),
+            mean_ret_30 / downside_std_30,
+        ).otherwise(F.lit(0.0)),
+    )
+
+    # ── Max Drawdown (30d rolling) ───────────────────────────────────────
+    # drawdown_t = close_t / running_max - 1  (always <= 0)
+    running_max_30 = F.max("close").over(w_30)
+    df = df.withColumn(
+        "max_drawdown_30d",
+        F.when(
+            running_max_30 > 0,
+            (F.col("close") / running_max_30) - 1,
+        ).otherwise(F.lit(0.0)),
+    )
+
+    # ── NAV Momentum (14d) ───────────────────────────────────────────────
+    # How far current NAV is above/below its 14-day SMA (relative strength)
+    sma_14 = F.mean("close").over(w_14)
+    df = df.withColumn(
+        "nav_momentum_14d",
+        F.when(sma_14 > 0, (F.col("close") / sma_14) - 1).otherwise(F.lit(0.0)),
+    )
+
+    # Clean up intermediate columns
+    df = df.drop(daily_ret_col, downside_col)
     return df
 
 
@@ -208,6 +361,12 @@ def run_spark_etl(source_table: str, dest_table: str):
         logger.info("Computing technical indicators across cluster...")
         features_df = compute_indicators(raw_df)
 
+        # Step 2b: Add NAV-specific features for mutual fund tables
+        is_mutual_fund = "mutual_fund" in source_table.lower()
+        if is_mutual_fund:
+            logger.info("Detected mutual fund source — computing NAV-specific features...")
+            features_df = compute_nav_features(features_df)
+
         # Drop rows where long-term indicators are null (warmup period: SMA 200/50 etc)
         # This reduces output size and only keeps valid/ready data
         features_df = features_df.dropna(subset=["sma_50"])
@@ -236,6 +395,6 @@ def run_spark_etl(source_table: str, dest_table: str):
         spark.stop()
 
 if __name__ == "__main__":
-    src = sys.argv[1] if len(sys.argv) > 1 else "public.crypto_price_raw"
-    dst = sys.argv[2] if len(sys.argv) > 2 else "public.crypto_features_daily"
+    src = sys.argv[1] if len(sys.argv) > 1 else "bronze.crypto_price_raw"
+    dst = sys.argv[2] if len(sys.argv) > 2 else "silver.crypto_features_daily"
     run_spark_etl(src, dst)

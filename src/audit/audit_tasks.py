@@ -6,10 +6,93 @@ These tasks are executed as part of the DAG to validate ETL operations.
 """
 
 import logging
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict
 from src.audit.audit_logger import AuditLogger
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_training_gate_failure(reason: str):
+    schema_prefix = "schema_gate_failed_"
+    freshness_prefix = "freshness_gate_failed_"
+    if reason.startswith(schema_prefix):
+        return "schema", reason[len(schema_prefix):]
+    if reason.startswith(freshness_prefix):
+        return "freshness", reason[len(freshness_prefix):]
+    return None, None
+
+
+def _load_training_gate_failures(model_dir: str = "/opt/airflow/models"):
+    root = Path(model_dir)
+    if not root.exists():
+        return {
+            "status": "missing_model_dir",
+            "model_dir": str(root),
+            "scanned_files": 0,
+            "tracked_models": 0,
+            "failures": [],
+        }
+
+    latest_by_model = {}
+    scanned_files = 0
+    for metrics_path in root.glob("*_metrics.json"):
+        scanned_files += 1
+        try:
+            payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        source_table = payload.get("source_table", metrics_path.stem)
+        horizon = payload.get("horizon", "unknown")
+        key = f"{source_table}:{horizon}"
+        mtime = metrics_path.stat().st_mtime
+        current = latest_by_model.get(key)
+        if current is None or mtime > current["mtime"]:
+            latest_by_model[key] = {
+                "path": metrics_path,
+                "mtime": mtime,
+                "payload": payload,
+            }
+
+    failures = []
+    for item in latest_by_model.values():
+        payload = item["payload"]
+        status = str(payload.get("status", "")).lower()
+        reason = str(payload.get("reason", ""))
+        gate_type, gate_detail = _extract_training_gate_failure(reason)
+        if status != "fallback" or gate_type is None:
+            continue
+
+        failures.append(
+            {
+                "gate_type": gate_type,
+                "gate_detail": gate_detail,
+                "reason": reason,
+                "source_table": payload.get("source_table"),
+                "horizon": payload.get("horizon"),
+                "metrics_path": str(item["path"]),
+                "updated_utc": datetime.fromtimestamp(item["mtime"], tz=timezone.utc).isoformat(),
+            }
+        )
+
+    failures = sorted(
+        failures,
+        key=lambda x: (
+            str(x.get("source_table") or ""),
+            str(x.get("horizon") or ""),
+            str(x.get("gate_type") or ""),
+        ),
+    )
+    return {
+        "status": "ok",
+        "model_dir": str(root),
+        "scanned_files": int(scanned_files),
+        "tracked_models": int(len(latest_by_model)),
+        "failures": failures,
+    }
 
 
 def audit_etl_task(asset_class: str, source_table: str, target_table: str, **context):
@@ -213,15 +296,36 @@ def generate_daily_audit_report(**context):
             failed_tasks = audit.get_failed_tasks(days=1)
             for task in failed_tasks:
                 logger.warning(f"  - {task.get('dag_id')}/{task.get('task_id')}: {task.get('error_message')}")
+        else:
+            failed_tasks = []
+
+        training_gate_summary = _load_training_gate_failures()
+        gate_failures = training_gate_summary.get("failures", [])
+        if gate_failures:
+            logger.warning("\nTraining Gate Failures (latest artifacts):")
+            for fail in gate_failures:
+                logger.warning(
+                    "  - %s [%s] gate=%s detail=%s path=%s",
+                    fail.get("source_table"),
+                    fail.get("horizon"),
+                    fail.get("gate_type"),
+                    fail.get("gate_detail"),
+                    fail.get("metrics_path"),
+                )
+        else:
+            logger.info("\nTraining Gate Failures: none detected in latest model artifacts.")
         
-        # Extract task results from upstream tasks
-        task_instance = context["task_instance"]
-        upstream_tasks = context["dag"].get_task(task_instance.task_id).upstream_list
-        
+        report_status = "PASS"
+        if failed_runs > 0:
+            report_status = "FAIL"
+        elif gate_failures:
+            report_status = "WARN"
+
         audit_results = {
             "summary": summary,
-            "failed_tasks": audit.get_failed_tasks(days=1) if failed_runs > 0 else [],
-            "report_status": "PASS" if failed_runs == 0 else "FAIL"
+            "failed_tasks": failed_tasks,
+            "training_gate_summary": training_gate_summary,
+            "report_status": report_status,
         }
         
         logger.info("=" * 80)

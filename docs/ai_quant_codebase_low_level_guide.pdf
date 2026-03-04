@@ -1,677 +1,118 @@
 %PDF-1.4
-%âãÏÓ
+%“Œ‹ž ReportLab Generated PDF document (opensource)
 1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
+<<
+/F1 2 0 R /F2 3 0 R /F3 6 0 R
+>>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [ 4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R ] /Count 7 >>
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
 endobj
 3 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
 endobj
 4 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+<<
+/Contents 11 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 10 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
 endobj
 5 0 obj
-<< /Length 2428 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-T*
-(AI Quant Investment Engine) Tj
-T*
-(Low-Level Codebase Guide for Junior Developers) Tj
-T*
-(Generated on: 2026-02-26 19:43:51) Tj
-T*
-T*
-(1\) What this system is) Tj
-T*
-(This project is an end-to-end data and ML pipeline for investment signals. It collects raw market data,) Tj
-T*
-(computes technical indicators,) Tj
-T*
-(trains Random Forest models, generates 1-year and 5-year investment signals, validates data quality, and) Tj
-T*
-(distributes output through) Tj
-T*
-(an email report, a FastAPI endpoint, and a Streamlit dashboard.) Tj
-T*
-T*
-(2\) Runtime architecture) Tj
-T*
-(Main containers are defined in docker-compose.yml.) Tj
-T*
-(- postgres: stores all raw, feature, signal, and audit data.) Tj
-T*
-(- airflow-api-server: runs scheduler + API server in one container.) Tj
-T*
-(- airflow-dag-processor and airflow-triggerer: handle DAG parsing and trigger mechanics.) Tj
-T*
-(- streamlit: renders the interactive investment dashboard.) Tj
-T*
-(- api: exposes REST endpoints for signals.) Tj
-T*
-(- ollama + ollama-init: local LLM inference support for narrative analysis and chat.) Tj
-T*
-T*
-(Ports in use:) Tj
-T*
-(- Airflow web/API: 8080) Tj
-T*
-(- Spark UI \(when active\): 4040) Tj
-T*
-(- FastAPI: 8000) Tj
-T*
-(- Streamlit: 8501) Tj
-T*
-(- Ollama: 11434) Tj
-T*
-(- Postgres: 5432) Tj
-T*
-T*
-(3\) Repository map and ownership) Tj
-T*
-(Read these files first in this exact order:) Tj
-T*
-(- dags/ai_quant_daily_pipeline.py: orchestration logic and dependency graph.) Tj
-T*
-(- src/ingestion/*.py: raw data ingestion into bronze schema.) Tj
-T*
-(- src/etl/pyspark_etl.py: feature engineering into silver schema.) Tj
-T*
-(- src/recommendation/train_model.py: model training and artifact persistence.) Tj
-T*
-(- src/recommendation/strategy_engine.py: inference and signal table writes to gold schema.) Tj
-T*
-(- src/recommendation/email_alert.py: final reporting + SMTP dispatch.) Tj
-T*
-(- src/audit/*.py and database/audit_reconciliation_framework.sql: audit layer.) Tj
-T*
-(- api/main.py and streamlit_app/app.py: serving layer.) Tj
-T*
-T*
-(4\) Data layers and schema strategy) Tj
-T*
-(The pipeline uses a medallion pattern:) Tj
-T*
-(- bronze: raw ingested OHLCV or NAV data.) Tj
-T*
-(- silver: technical indicators and cleaned feature data.) Tj
-T*
-(- gold: decision-oriented signal tables.) Tj
-T*
-(- audit: ETL observability, reconciliation, and quality metrics.) Tj
-T*
-T*
-(Common key columns across layers:) Tj
-ET
-endstream
+<<
+/Contents 12 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 10 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
 endobj
 6 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+<<
+/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F3 /Subtype /Type1 /Type /Font
+>>
 endobj
 7 0 obj
-<< /Length 2530 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(- symbol: instrument identifier \(for mutual funds it is synthetic, such as MF<schemeCode>\).) Tj
-T*
-(- event_time or trade_date: timestamp/date of the datapoint.) Tj
-T*
-T*
-(5\) DAG execution flow in detail) Tj
-T*
-(DAG ID: ai_quant_daily_pipeline.) Tj
-T*
-(Asset classes covered:) Tj
-T*
-(- crypto) Tj
-T*
-(- nifty50) Tj
-T*
-(- nifty_midcap) Tj
-T*
-(- nifty_smallcap) Tj
-T*
-(- mutual_funds) Tj
-T*
-T*
-(Per asset class, the logical chain is:) Tj
-T*
-(ingest -> spark_etl -> train_model -> generate_signals -> audit_etl -> quality_check -> reconcile) Tj
-T*
-T*
-(Scheduling behavior:) Tj
-T*
-(- crypto and nifty50 run in parallel first.) Tj
-T*
-(- midcap, smallcap, and mutual funds then run sequentially to reduce memory pressure.) Tj
-T*
-(- after all branches: generate_daily_audit_report -> send_opportunity_email) Tj
-T*
-T*
-(6\) Ingestion layer internals) Tj
-T*
-(6.1 Binance ingestion \(src/ingestion/binance_ingest.py\)) Tj
-T*
-(- Pulls klines from Binance public API using symbols from settings.BINANCE.) Tj
-T*
-(- Writes to bronze.crypto_price_raw.) Tj
-T*
-(- Uses UNIQUE\(symbol, event_time\) and ON CONFLICT DO NOTHING for idempotency.) Tj
-T*
-T*
-(6.2 NSE + Yahoo Finance ingestion \(src/ingestion/yfinance_ingest.py\)) Tj
-T*
-(- Dynamically fetches index constituents from NSE CSV endpoints.) Tj
-T*
-(- Uses yfinance per symbol and captures longName as asset_name when possible.) Tj
-T*
-(- Implements incremental loading by pre-reading MAX\(event_time\) per symbol.) Tj
-T*
-(- Writes to bronze.<index>_price_raw with asset_name field.) Tj
-T*
-T*
-(6.3 Mutual fund ingestion \(src/ingestion/mfapi_ingest.py\)) Tj
-T*
-(- Discovers schemes from MFAPI, filtered by top AMC keywords + Direct Growth constraint.) Tj
-T*
-(- Fetches NAV history concurrently with ThreadPoolExecutor.) Tj
-T*
-(- Applies incremental date filtering and inserts/upserts into bronze.mutual_funds_price_raw.) Tj
-T*
-T*
-(7\) Spark ETL internals \(src/etl/pyspark_etl.py\)) Tj
-T*
-(Main function: run_spark_etl\(source_table, dest_table\).) Tj
-T*
-T*
-(Execution steps:) Tj
-T*
-(- Create SparkSession tuned for Docker memory constraints and adaptive execution.) Tj
-T*
-(- Determine source MIN\(id\), MAX\(id\), COUNT\(*\) in Postgres.) Tj
-T*
-(- Choose JDBC partition strategy:) Tj
-T*
-(  - if min/max present, parallel JDBC read using id bounds.) Tj
-T*
-(  - else fallback to single partition read.) Tj
-T*
-(- Cast numeric columns and repartition by symbol before window functions.) Tj
-T*
-(- Compute indicators with Spark windows in compute_indicators:) Tj
-ET
-endstream
+<<
+/Contents 13 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 10 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
 endobj
 8 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+<<
+/PageMode /UseNone /Pages 10 0 R /Type /Catalog
+>>
 endobj
 9 0 obj
-<< /Length 2001 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(  - moving_avg_7d, volatility_7d) Tj
-T*
-(  - ema_20 \(implemented as SMA-based proxy in this code\)) Tj
-T*
-(  - macd, macd_signal) Tj
-T*
-(  - Bollinger bands \(bb_upper, bb_lower\)) Tj
-T*
-(  - rsi_14) Tj
-T*
-(  - atr_14) Tj
-T*
-(  - stoch_k, stoch_d) Tj
-T*
-(  - sma_50, sma_200) Tj
-T*
-(- Drop rows where sma_50 is null \(warmup period filter\).) Tj
-T*
-(- Write to silver table with mode=overwrite.) Tj
-T*
-T*
-(Important implication:) Tj
-T*
-(- overwrite mode recreates the full silver table each run for that asset class.) Tj
-T*
-T*
-(8\) Model training internals \(src/recommendation/train_model.py\)) Tj
-T*
-(Main function: train_model\(source_table, horizon\).) Tj
-T*
-T*
-(Horizons configured:) Tj
-T*
-(- 1y: 252 days ahead, positive class if future_close > close * 1.10) Tj
-T*
-(- 5y: 1260 days ahead, positive class if future_close > close * 1.50) Tj
-T*
-T*
-(Labeling strategy:) Tj
-T*
-(- SQL CTE computes future_close with LEAD\(close, days_forward\) PARTITION BY symbol ORDER BY) Tj
-T*
-(  event_time.) Tj
-T*
-(- Rows with null features or null future_close are excluded.) Tj
-T*
-T*
-(Split strategy:) Tj
-T*
-(- Chronological 80/20 split \(not random\) to reduce look-ahead bias.) Tj
-T*
-T*
-(Model:) Tj
-T*
-(- RandomForestClassifier) Tj
-T*
-(- class_weight='balanced') Tj
-T*
-(- n_estimators 100 for 1y, 200 for 5y) Tj
-T*
-(- max_depth 12, random_state 42, n_jobs -1) Tj
-T*
-T*
-(Artifacts:) Tj
-T*
-(- Saved in /opt/airflow/models/<source_table_name>_rf_<horizon>_model.joblib) Tj
-T*
-(- If dataset is empty, writes a DummyClassifier fallback.) Tj
-T*
-T*
-(9\) Signal engine internals \(src/recommendation/strategy_engine.py\)) Tj
-T*
-(Main function: generate_signals\(source_table, dest_table\).) Tj
-T*
-T*
-(Inference flow:) Tj
-T*
-(- Load latest row per symbol from silver source.) Tj
-T*
-(- Load both 1y and 5y model artifacts.) Tj
-T*
-(- Compute probabilities with safe predict logic for single-class models.) Tj
-T*
-(- Convert probabilities to business labels with threshold tables.) Tj
-T*
-ET
-endstream
+<<
+/Author (\(anonymous\)) /CreationDate (D:20260226215537+05'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20260226215537+05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (\(unspecified\)) /Title (\(anonymous\)) /Trapped /False
+>>
 endobj
 10 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+<<
+/Count 3 /Kids [ 4 0 R 5 0 R 7 0 R ] /Type /Pages
+>>
 endobj
 11 0 obj
-<< /Length 2140 >>
+<<
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 3169
+>>
 stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(Threshold mapping examples:) Tj
-T*
-(- 1y >= 0.72 -> INVEST NOW) Tj
-T*
-(- 1y >= 0.58 -> ACCUMULATE) Tj
-T*
-(- 5y >= 0.70 -> STRONG HOLD) Tj
-T*
-T*
-(Gold table schema:) Tj
-T*
-(- symbol, trade_date) Tj
-T*
-(- signal, confidence \(primary 1-year view\)) Tj
-T*
-(- signal_1y, confidence_1y) Tj
-T*
-(- signal_5y, confidence_5y) Tj
-T*
-T*
-(Upsert behavior:) Tj
-T*
-(- PRIMARY KEY \(symbol, trade_date\)) Tj
-T*
-(- ON CONFLICT updates signal and confidence columns.) Tj
-T*
-T*
-(10\) Report and email pipeline \(src/recommendation/email_alert.py\)) Tj
-T*
-(Main function: send_opportunity_email\(\).) Tj
-T*
-T*
-(Report generation behavior:) Tj
-T*
-(- Reads latest signals + latest features per symbol for each asset class.) Tj
-T*
-(- Includes asset_name \(fallback to symbol if asset_name missing\).) Tj
-T*
-(- Filters rows where any signal column is one of:) Tj
-T*
-(  INVEST NOW, ACCUMULATE, STRONG BUY, BUY) Tj
-T*
-(- Writes one worksheet per asset class into an XLSX file.) Tj
-T*
-T*
-(Formatting behavior:) Tj
-T*
-(- Green row highlight if any signal column is INVEST NOW.) Tj
-T*
-(- confidence columns displayed as percentages using 0.00% number format.) Tj
-T*
-T*
-(SMTP behavior:) Tj
-T*
-(- Reads credentials from environment, then Airflow Variables as fallback.) Tj
-T*
-(- Supports multiple recipients \(comma or semicolon separated\).) Tj
-T*
-(- If default XLSX path is locked, writes to timestamped fallback filename.) Tj
-T*
-T*
-(11\) Audit framework internals) Tj
-T*
-(11.1 SQL layer \(database/audit_reconciliation_framework.sql\)) Tj
-T*
-(Creates audit schema objects:) Tj
-T*
-(- tables: etl_audit_log, etl_reconciliation, data_quality_metrics, table_lineage, change_log,) Tj
-T*
-(  process_audit) Tj
-T*
-(- views: v_audit_summary, v_reconciliation_status, v_data_quality_summary, v_failed_tasks) Tj
-T*
-(- functions: sp_log_etl_start, sp_log_etl_end, sp_reconcile_tables, fn_generate_daily_report) Tj
-T*
-T*
-(11.2 Python layer \(src/audit/audit_logger.py\)) Tj
-T*
-(AuditLogger methods:) Tj
-T*
-(- log_etl_start / log_etl_success / log_etl_failure) Tj
-T*
-(- reconcile_tables) Tj
-T*
-(- check_data_quality) Tj
-T*
-(- get_audit_summary) Tj
-ET
-endstream
+Gatm=>Ar9+&q801R$S!)?!GnY&mu*W:=?#/>@XRZ$",.sD0$pp>#@oC`VK%:84f'$=I-70M^4TJ6dC*DN\sZ'^F"C_2?4h20KRfNdp]Zfbu@B(?,G:]kas(g2%@fL5ga\uZ9;$+h(^Jjda_3Jbc[flY3WW+H'Y0dQ48QU.=pUL8%9QF3jH4*T%I7Igi@=\Xd*AZ\<1*81u#h9Ac)UrjI(\j0rG%t#ID0Rp,cnJ+ASngbE)0-Hg`DP.J=ij^mEi;1:W.3$-P405Ft:o)A2`dHmB:qrJUm#T\Dh6+6katp5*[Xi5,/o8OK#fm[!)dSo332)7TU&JC^ClK%@#Z9inSV&*8$)P@<c<HJu*5)^hU-:>e%\9s1TN9PSg0A#L;QT*5ZE-ZMBmI7BmKWl&+3+mFGY[AL%*=T2/Q6a7!O2"#+Z#U_7\nMh%-M&,.T53EN;;[Bl]EC*P-IM>%8?=;gB.)R-S[puq]in0:F/WSC3cYQ;nXLKE-?C)g<A.5b$JOO-&Q=1>T^W]4u(.*CZ)<Amho`N'+O>9Om%0P_YC-9'G:JOc<C^i4QC#Z$dK1^pZ(I*9c0&uTC:BT8-!?mP;5Ks(b`Y#j[A1HFk_?JmO\Oj)L9%Z07"(3d8,Qkj>:Z3(NPm.E\l1j:he&nHN[@rZ%&Kkc:&62E`1o&Gjl![[mhhap+2_5&@Z&DE+Ea=X9esOrT9PPauO#7+/ngL7P!onC-VAZD#Vkf(ZC3Qmr:9/SW;nDMJ/K-HoV@16`bp.J15+KWN-ZnPthBXhn@(_J%[R)b\?qf$\Lab*n]b#!Nol)I0_\R##j<7):h@7!6+\?2!PJq8'i[gq,'hLtXJ9.>o\B+`J=\ATd82K3K\-YNPj0q+cFqrQS/3j=3ZTg+YRV<suVs#%"W?GHY.)(ROX,^u4O+/Z4,i6^UHE,8I9h2V]YKP7X9WIt3Nq1]/TB,59i?52?&;L`N>0Ls<G^I^)A%Qdsd><*@rNQrCO"bZE03Xp]-0bDhib/[rJnm6BYHU!DK"diZ2,e>A2B!QZKI(WVkTe&+gc!fR.4+iQ6$X%U'`20(/$+>)?Fj[5*%YBSBZ2k*>tMJ1_FrJ74:L32e)fZVBUN?7@:Ab9RDp3@5U.A?aT/cmlI49D:L/_:2iHWLNMGqo<jKQJb6-%%QQ:BC;Q^5G_GRUM]XZ;XF13W^>;QIb&t`5i+9H>?'[7gO"-!Ann2"m<$U7nW@8Yd5,)h9&D#n*uj-KSg;N)%>Y!X."caCUO'lOZ\'^]@onL`mt%s9D2HSDP]P^Z,b"ZO?1WGMlJD'.V#cFB$k(7"m#9c[H';7=DHMJhh.7l'GYLLhIEXg[i<g>+g3bpii%/(&_..e6Fcd0`K7LFaSV\tf]:!RVN77'!7g@&d3(.U-tL<g$sR<ZF`U9.2Nu5t&2*Emnr$0N.?nGRZS=9S1;pn5@ga[Z)]BMXmK=G/p<;#lGDVq/lTHLT9qGTuqPMd"I(+`s/b@+=*E-(h[.tU2KA[JZ&DOhS=cV!*Z,[s%u(_6KM4+d43:2CS],D>2lQb5]-7o!,-EqiC2<B7]XE!mfMVKUI9<GSgAY_6tdTP0[2N[#[.n)2)aTYj"p]4IAGMMVeap#*J>3>"cA4Dddl>aj,mfdMaSDO]&W>$&>io.D(_bKYLNhcK;<''rnLbq+1[''UUc&=eWRDJT2uDNpn=sC:Xt')UP`%Z@-jD%1lgHV]fOrW9#kraj?p&4Y'Yl?pptjOf"\Sc?IM`#)>)Jpo^sM:EAJZZU+5X#@1Vh<iOGl[\88RInOZ>/CiCQE%;+HQi>6CEon<[4"!4$j8P!gK/VW0^N"eXHV)c<X/b5.RB>Uih>bY'9K@`)F568aC5p,^X723Zn`NARe3/Z[<S#nEMmSD.NhY"BM)1AZd#NQVDap9<7).$`J>YQ="D[]$o)N)N;]MqK)n)9Wioom\t3U,t/(I3QeJMg';MuF"u;a3WjV,&@hiHqfY!IQ8/4:G`>n3W-6IcBfR<UD$'nT47qZZrap],5^*Cs_\VJKfkOWuN)9$.(!"l"WBBjZiDMT)rRjfE(o(oLhCZq*Z>p-2P^Z;u&.a<c,99Bp+#h"IKj!V/4iVaBW1CL8bR5a,=@.4>TOT%mC)3_M]em6YP<SFVfHnJZDEUQI@$/Mg8J:+Umt?`],:6L!Y>1ckBV6.BWs*0:-X'2ElOK?=<O?%OJQbJkh[Un>X3Dlia[IVRLI-"*jjDVZ$cMg_6qCf>cfC=SgSEWrN&o9@>5R\uPlgEX-L[KQ2\8kSKR<*^is9)UV]aQk.4Rf3ck$1V)cCc*u)F1:b02^DtSF7TVP#(UKUCdC8YbCc)-;F3uY;Fk-J&*]4\B`Uk<@]c!Ahh5XU@L5##4D25Zr*jRoe\-lS4roI#'"(5c_`Y,X@)o.5nP&tei1Du5A-iBJD_<SaBNPS>Z%'SX;?Ta28*hW;6='-=<L%;31<H1u%"=dfRT4d\u*n`]>$u$s]KH9.6#8'+CkI]3Ran4o_oCV1V6>Shpa/-Pl%V2VMi0gV*J_`+bX.bI9.'@(R+)CA>b8q^Ws$Ks_pIpRm:[l/jREJg\iA6h0T#4&NYBXAL>kI^rL*Ph"I.kn=%N'(]Pp%Ylb6kMH>#WflNa#FX0m)uP]<-en;KYsBVS;%5e:RBK)-"qhC>rA2N\([,Cq=C=(s7Zl:MsS;F]Cf0aj7@18hA8jju1/LMSs8'7K^5VfeE,J_L#<^lITOD"&?2QEh@-Y`&_Y4L]&RA[?bT-jYBCE5BXJ/;Q_aR=-"C$P15Ng>DK+%.Fo6glL7`)(b]\GY*-`7h;P6"Ep&?5eNC[\DZ-;&9JkVc(.iCd\4%$R\j]NjE_@uLVctDq\$XoKQ3OUlRiQC/`*/)0Ug#,+)r76X4)VU'!DNFPY\td_=3=(N:>\UbFP5Uh8_NJI8W)bA[[F_t99\"I3rC1Y44C%'h#1P]4Y[Ip0?e&tDg%&p1Loe.Ff_cBm+sA"CEm&0<rnMlNmZBlm(RaSpNB&Ji2'Sbb6M?'#>@2]0AS**?H$0K`#IQoF"R3^U,YDDPO+=,b1EgD;s!mXK;nG?X1;4*^)fq4(f<u'b0Ns2&+9^_itX@#q&l"]b:$hR0?XU2XK,qF+_%0G4k.Z@?A+#7Xrck>cR^8+/6<@&g!JQlq0Z=/eB=eKE4K)R*m3SRQj-(\#DHB5pA~>endstream
 endobj
 12 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+<<
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 1605
+>>
+stream
+Gat%#hc&8h&:Vr4YqJ%'4.o3OABW3hJ^VEC6a$[1h+MB9C+P1!ItZGYEcZa.XW:&XJ]+EZ8Yl<l]D=]_lnY7/_j]KS']?kChOQ?.*2_?'";*=NK29t<h1SV`0eWOD30SdsK_%H"#-44bL5QdV7&a"6$mjk`oYI<,13!28K'o;J29n48NGhEglPla)Rg)AQ]QH&*@IGasJ2;7b&id#QaLm)g0:9JU([Xbkh1M`FKZ&?p$58F!UX*mcl)]QaftAiWeDSqSfhItSp^^+oAlcK"&ME#@!TaRA#Nd+KH&.$TVT6AlHJYJ(8]X'P`qZ]T%.G>3*8.^W^`rlV5mY3qM<Ar?.PtZdmR[q5ea?=+V7<a?LD5CIL^F8)0\+TF6D"HS^sgVQ9u(+@j44/@.sWN[IOYciek#?-34SK[a$JMP2,B9m,+CsAT*spOTZH96*#4/V?P^X_)hoC,c[6K-RqFCL)<JdE</81=F]fG`^bR/lTOEWTRR\]M)9hX;dnn*q4C,$^Z,i,Bb6!NI='fg]`OFl[UT5sOd%bipW5gso$/:(("Aqkcd_8s5EOfYE*YPD6d3JO'):eJV#H&$>G6rJMk0qo-?h&9LL<EOD#or9mDY`(fm%)ubSO98o;8h/4Ch8q.C<Pj\&e=e_!fhe7l%Ym,[Ll?:gBa_mD&A-HQeTtnQ'G,&UroD`LV^"LQ40ePOKVPlfY:?p"OsG+%!?<DJ6Fg"5cksB:`m2\0up?fZHROYi4s0B>6Y>VD[34ba@0?u2a7Q"GA*WJ0u1MU;BdD-i4fNjKg25\"7lQm4(.MQ]0)>C;!du+Njn3eP$"e*:rMA!I"ou3[ThgaVq6aaO+3eA5>U<HVt#hsBJo)'kmRLj2'G.!I`_mHT^(MBL_BJ7KT":ci=[2JV3JRF!XB$:g1i%lR-b<!-?+Di@Fm?OB+F8rhn*)bJ"(m"o,69FD,jJ<mD&l4Ypp06:i=KpjQoQdD;e@Hh8n80'lC'MgYJg79AYsMNSTUUHRRTOU9WI8Z[5rb'gun_UX"l]g=-Ojh2Zfo@u]0HJce)qF_!Fl"$;S:@5j7"hcZa<&fnrO2VR?@R2p(M:SBR+dV,8hc>5M9I0)L:V2Y-DF(WH0mF0[T/Rc$4?>D`CI_&iP-mDfM]oXnt\6bnR'sXO4DdZjaf6thb9eDZIH]l0/`nVnV36gp:.b!)+^rN5!htib-ZbSN.bG&>\Ftm,bj<e^A*7j#NS+%73@iU)\B6SKJ2G<@VH?QKU(n\l/cXm\^;?SVPXFS1C<S4n%=?irScW>BhJ?BglQm_Q>!=s1\YUT$0q<W*mVmBr7/Dd#_UbJIJ#ZCU\e+5?/2mX6FIF"S16/UjF"NTE'hH_+LKjkqWU:37;,bJRtPj8&GS&KsfdilVk%Gh@fHifp<*@L@(,ae"7h;nU0.dC7Gpf<['WZ7.a:kK+#Co]mVaeDqPXGaS<Mp(e;1c]."Zg4nbArs"Ep!l39N.a>@`FGYMB_^?($C=b]C>;UaIhJ,$>fXUgnbk8)f'%1H<"V1CJ1<0K12)]g_8>C=*>Y&L@Q.<(%nn]4o=BQm!;kDOiX3mV_PtsA?2H6FgK*^Z$/7tPlW35iS#=uWjF<#,oH4~>endstream
 endobj
 13 0 obj
-<< /Length 1939 >>
+<<
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 1015
+>>
 stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(- get_failed_tasks) Tj
-T*
-T*
-(11.3 Airflow glue layer \(src/audit/audit_tasks.py\)) Tj
-T*
-(Task wrappers called by the DAG:) Tj
-T*
-(- audit_etl_task) Tj
-T*
-(- quality_check_task) Tj
-T*
-(- reconcile_task) Tj
-T*
-(- generate_daily_audit_report) Tj
-T*
-T*
-(12\) FastAPI service internals \(api/main.py\)) Tj
-T*
-(Endpoint:) Tj
-T*
-(GET /api/v1/signals/{asset_class}?limit=50&min_confidence=0.0) Tj
-T*
-T*
-(Behavior:) Tj
-T*
-(- validates asset_class against allowlist.) Tj
-T*
-(- queries latest row per symbol from gold.<asset_class>_investment_signals.) Tj
-T*
-(- filters by confidence_1y >= threshold OR confidence_5y >= threshold.) Tj
-T*
-(- returns JSON with asset_class, count, and data array.) Tj
-T*
-T*
-(13\) Streamlit dashboard internals \(streamlit_app/app.py\)) Tj
-T*
-(Primary function: render_asset_dashboard\(signals_table, features_table, asset_label, ...\)) Tj
-T*
-T*
-(UI flow:) Tj
-T*
-(- Load latest signals and latest features \(cached, TTL 10 minutes\).) Tj
-T*
-(- Allow horizon switch between 1-year and 5-year columns.) Tj
-T*
-(- Merge with feature columns for display metrics.) Tj
-T*
-(- Show ranked table with signal labels and confidence.) Tj
-T*
-(- On row select, load full symbol history and render charts.) Tj
-T*
-(- Show AI narrative via Ollama, with deterministic fallback notes when LLM is unavailable.) Tj
-T*
-T*
-(Tabs:) Tj
-T*
-(- Nifty 50) Tj
-T*
-(- Nifty Mid Cap) Tj
-T*
-(- Nifty Small Cap) Tj
-T*
-(- Indian Mutual Funds) Tj
-T*
-(- Crypto) Tj
-T*
-T*
-(14\) LLM integration \(src/llm/ollama_analyst.py\)) Tj
-T*
-(Functions:) Tj
-T*
-(- get_ollama_analysis: summary narrative for selected symbol.) Tj
-T*
-(- chat_with_ollama: question-answer interaction using contextual indicators.) Tj
-T*
-T*
-(Operational note:) Tj
-T*
-(- Uses internal URL http://ollama:11434 from docker network.) Tj
-T*
-(- If model call fails, caller falls back gracefully.) Tj
-T*
-T*
-(15\) Configuration and secrets) Tj
-T*
-(Core configs:) Tj
-ET
-endstream
-endobj
-14 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
-endobj
-15 0 obj
-<< /Length 2426 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(- src/config/settings.py provides POSTGRES and BINANCE dataclasses.) Tj
-T*
-(- .env is loaded by docker-compose for runtime secrets and credentials.) Tj
-T*
-T*
-(Security reminder for juniors:) Tj
-T*
-(- Never commit .env.) Tj
-T*
-(- Rotate credentials immediately if they are ever exposed.) Tj
-T*
-T*
-(16\) Local run and debugging checklist) Tj
-T*
-(First boot:) Tj
-T*
-(1. docker compose up -d --build) Tj
-T*
-(2. verify Airflow UI on port 8080) Tj
-T*
-(3. run or trigger ai_quant_daily_pipeline) Tj
-T*
-T*
-(Quick health checks:) Tj
-T*
-(- airflow tasks test ai_quant_daily_pipeline send_opportunity_email <date>) Tj
-T*
-(- API root at http://localhost:8000/) Tj
-T*
-(- Streamlit at http://localhost:8501) Tj
-T*
-T*
-(Useful debug targets:) Tj
-T*
-(- ingestion failures: network/API throttling, symbol list endpoint changes.) Tj
-T*
-(- Spark ETL failures: memory pressure, JDBC partition bounds, missing id column.) Tj
-T*
-(- model failures: insufficient history for horizon labels.) Tj
-T*
-(- email failures: SMTP auth, invalid recipient format, output file permissions.) Tj
-T*
-T*
-(17\) How to add a new asset class \(practical recipe\)) Tj
-T*
-(1. Add ingestion function that writes bronze.<new>_price_raw with symbol, event_time, OHLCV.) Tj
-T*
-(2. Add DAG tasks:) Tj
-T*
-(   - ingest_<new>) Tj
-T*
-(   - spark_etl_<new> \(dest silver.<new>_features_daily\)) Tj
-T*
-(   - train_model_<new>) Tj
-T*
-(   - generate_signals_<new> \(dest gold.<new>_investment_signals\)) Tj
-T*
-(   - audit + quality + reconcile tasks) Tj
-T*
-(3. Add optional tabs in Streamlit and API route support in allowlist.) Tj
-T*
-(4. Add email tab mapping in send_opportunity_email.) Tj
-T*
-(5. Validate end-to-end with airflow tasks test per step.) Tj
-T*
-T*
-(18\) Common code-level pitfalls to watch) Tj
-T*
-(- SQL injection risk: some table names are interpolated via f-strings. Keep table inputs controlled.) Tj
-T*
-(- Overwrite semantics in ETL can remove table-level extras. Re-apply schema changes if needed.) Tj
-T*
-(- Encoding issues in source comments indicate mixed editor encodings; standardize to UTF-8.) Tj
-T*
-(- LLM chat prompt currently allows high-certainty investment advice; review compliance before) Tj
-T*
-(  production.) Tj
-T*
-T*
-(19\) Suggested learning path for a junior developer) Tj
-T*
-(Week 1:) Tj
-T*
-(- Read DAG and trace one asset class through all modules.) Tj
-T*
-(- Run one task at a time with airflow tasks test.) Tj
-T*
-ET
-endstream
-endobj
-16 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 17 0 R >>
-endobj
-17 0 obj
-<< /Length 866 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(Week 2:) Tj
-T*
-(- Add one indicator to Spark ETL and propagate through training + inference.) Tj
-T*
-(- Extend report formatting and confirm email output.) Tj
-T*
-T*
-(Week 3:) Tj
-T*
-(- Add one data quality rule in audit SQL and surface it in the daily audit report.) Tj
-T*
-T*
-(20\) Final mental model) Tj
-T*
-(Think of the system as a pipeline of contracts:) Tj
-T*
-(- Ingestion guarantees bronze row shape.) Tj
-T*
-(- ETL guarantees feature completeness and indicator semantics in silver.) Tj
-T*
-(- Training guarantees model artifacts by horizon.) Tj
-T*
-(- Signal engine guarantees normalized labels and confidence in gold.) Tj
-T*
-(- Audit guarantees observability and trust.) Tj
-T*
-(- API/UI/Email guarantee consumable outputs.) Tj
-T*
-T*
-(If one contract breaks, fix the contract boundary first, not the symptom in downstream code.) Tj
-ET
-endstream
+Gau`Q?#SIU'Rf_Z\;sbnYnH_<WGbqe"i5e5*ONKeN-+H+VFZuJlj;=*mhMra8R"#@dpY-W$2h:qkM3t%'8YnFKP0$Ar*7/*?P5mhe/Lq6Q9fp$n*8HD'oTCT8_:`jT&`<DN:V1X-XaD69q0<O@:`T,OB4I&lb%a)#)f^2[A%UOeqN$%WXq7(jV"&;P6D/g5^Wl;pMb+^%WI&I<,a_;%Y'*,Dl@$fS%\o9iD@h?<35l[.7k<7?XCX*;.pKlHB6AG8>#AC<bd;;i<hGGiN]-e]SL#<nH+m5%F<qY_11$S+2N4:4jPTYn[,ejj*.as80=u45\f./c:XBM(#`N_,teWk.18H.P,ERtX;7+)?C!]XfHmGkKbJ&mkHd_/+R-k6_>@Yq/r^VRrYY=10tSe=^5a@p+(Ijiq$3P,5KCQBGsmdXg.1&i!2D@;%P>&b+,iQ(#DfrI5]H]EK"ul?"X38&R6r5()*,'NRU:fB'3b^ub3_(q2BQRU1nB_CC'H\k,&9<eTr>\\"'rAX:Z<G^`JI9,3`O@1.+ncZ1^CsiRa,;@r3*37E'"<MduAIs`n6)\7X!9GOs0k.$W+Kti@t'hUESnu<1Ifn7G:6Hl,\DrK\A:Oq]K_,+H[V\3(/lbUMVaVi`73^W@0%@EoX&[DDip@B[IhPI#9"76)2Ls"+hB'H![!<WMa*&TLoF'C3.a@,mFT@GOQOY)qAVK\F'T;p,JCJG6Y&pAMXhF?T<#Lnfs*(DEI[![07Zb][pnMekUiV!QZH)4LbXOf_<6TFO5pPD@m'cFRBj<p/8`S>X2$mM,m1H"A708ls=k;(gag\-oHMHUE?HdDarPCFp:C,]o:rTUE)3fnekUYSX4X1%McG%g6T?koE!?(R;SUZ\tNBaK%)'kj`1h1+t7-%;2$a/60oXdlfW/rS\X-F5^,\?/pOEE)-c)aSO5;aSo"64Y*WE!8oF+q!Tti,8:$q^G_0B6.K0<bd9t8('m_g>&e&0HY]p3$;;5uB__6$5X&#i7I?O~>endstream
 endobj
 xref
-0 18
+0 14
 0000000000 65535 f 
-0000000015 00000 n 
-0000000064 00000 n 
-0000000163 00000 n 
-0000000233 00000 n 
-0000000359 00000 n 
-0000002838 00000 n 
-0000002964 00000 n 
-0000005545 00000 n 
-0000005671 00000 n 
-0000007723 00000 n 
-0000007851 00000 n 
-0000010043 00000 n 
-0000010171 00000 n 
-0000012162 00000 n 
-0000012290 00000 n 
-0000014768 00000 n 
-0000014896 00000 n 
+0000000061 00000 n 
+0000000112 00000 n 
+0000000219 00000 n 
+0000000331 00000 n 
+0000000536 00000 n 
+0000000741 00000 n 
+0000000846 00000 n 
+0000001051 00000 n 
+0000001120 00000 n 
+0000001400 00000 n 
+0000001472 00000 n 
+0000004733 00000 n 
+0000006430 00000 n 
 trailer
-<< /Size 18 /Root 1 0 R >>
+<<
+/ID 
+[<28f1b5993ffbe56ae336ce37ebe70af5><28f1b5993ffbe56ae336ce37ebe70af5>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 9 0 R
+/Root 8 0 R
+/Size 14
+>>
 startxref
-15813
+7537
 %%EOF

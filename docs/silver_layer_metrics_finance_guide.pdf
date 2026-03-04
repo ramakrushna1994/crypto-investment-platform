@@ -1,609 +1,74 @@
 %PDF-1.4
-%âãÏÓ
+%“Œ‹ž ReportLab Generated PDF document (opensource)
 1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
+<<
+/F1 2 0 R /F2 3 0 R
+>>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [ 4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R ] /Count 6 >>
+<<
+/BaseFont /Helvetica /Encoding /WinAnsiEncoding /Name /F1 /Subtype /Type1 /Type /Font
+>>
 endobj
 3 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+<<
+/BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding /Name /F2 /Subtype /Type1 /Type /Font
+>>
 endobj
 4 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+<<
+/Contents 8 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 7 0 R /Resources <<
+/Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>> /Rotate 0 /Trans <<
+
+>> 
+  /Type /Page
+>>
 endobj
 5 0 obj
-<< /Length 2079 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(AI Quant Investment Engine) Tj
-T*
-(Silver Layer Metrics - Beginner Friendly Finance Guide) Tj
-T*
-(Generated on: 2026-02-26 19:57:11) Tj
-T*
-T*
-(WHO THIS IS FOR) Tj
-T*
-(This document is for non-finance users, junior developers, analysts, and stakeholders.) Tj
-T*
-(It explains what each silver layer metric means, how we calculate it in code,) Tj
-T*
-(and how to interpret it in simple language.) Tj
-T*
-T*
-(IMPORTANT CONTEXT) Tj
-T*
-(In this project, silver metrics are generated in src/etl/pyspark_etl.py.) Tj
-T*
-(They are used by the ML model to produce confidence scores and investment signals.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(1\) QUICK IDEA: WHY WE USE THESE METRICS) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Raw price alone is noisy. A single close value does not tell the full story.) Tj
-T*
-(These metrics answer 3 practical questions:) Tj
-T*
-(- Trend: Is price generally moving up, down, or sideways?) Tj
-T*
-(- Momentum: Is movement getting stronger or weaker?) Tj
-T*
-(- Risk/Volatility: How unstable is the movement?) Tj
-T*
-T*
-(The model gets a better signal when all three are provided together.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(2\) THE SILVER LAYER INPUTS) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(For each asset symbol and each date, we start with OHLCV:) Tj
-T*
-(- Open) Tj
-T*
-(- High) Tj
-T*
-(- Low) Tj
-T*
-(- Close) Tj
-T*
-(- Volume) Tj
-T*
-T*
-(Most formulas in silver layer use Close, High, and Low.) Tj
-T*
-T*
-(Notation used below:) Tj
-T*
-(- C_t = Close on day t) Tj
-T*
-(- H_t = High on day t) Tj
-T*
-(- L_t = Low on day t) Tj
-T*
-(- PrevClose_t = C_\(t-1\)) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(3\) WORKED EXAMPLE DATA \(SIMPLE\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Assume one symbol has these 7 close prices:) Tj
-T*
-(Day1=100, Day2=102, Day3=101, Day4=104, Day5=106, Day6=105, Day7=107) Tj
-T*
-ET
-endstream
+<<
+/PageMode /UseNone /Pages 7 0 R /Type /Catalog
+>>
 endobj
 6 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+<<
+/Author (\(anonymous\)) /CreationDate (D:20260226215537+05'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20260226215537+05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+  /Subject (\(unspecified\)) /Title (\(anonymous\)) /Trapped /False
+>>
 endobj
 7 0 obj
-<< /Length 2193 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(Example A: 7-day moving average) Tj
-T*
-(SMA_7 = \(100+102+101+104+106+105+107\)/7 = 725/7 = 103.57) Tj
-T*
-(Meaning: average recent level is 103.57, which smooths daily noise.) Tj
-T*
-T*
-(Example B: daily change for momentum) Tj
-T*
-(delta on Day7 = C_7 - C_6 = 107 - 105 = +2) Tj
-T*
-(Positive delta means upward movement on latest day.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(4\) METRIC 1: moving_avg_7d) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Formula:) Tj
-T*
-(moving_avg_7d\(t\) = average of last 7 close values) Tj
-T*
-(Code equivalent:) Tj
-T*
-(F.mean\('close'\).over\(window_7\)) Tj
-T*
-(Why we use it:) Tj
-T*
-(- Fast trend signal for short-term direction.) Tj
-T*
-(- Helps model see if price is persistently rising/falling.) Tj
-T*
-(How to interpret:) Tj
-T*
-(- If current close > moving_avg_7d, short-term tone is usually stronger.) Tj
-T*
-(- If current close < moving_avg_7d, short-term tone may be weaker.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(5\) METRIC 2: sma_50 and sma_200) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Formula:) Tj
-T*
-(sma_50\(t\)  = average of last 50 closes) Tj
-T*
-(sma_200\(t\) = average of last 200 closes) Tj
-T*
-(Why we use them:) Tj
-T*
-(- sma_50 captures medium trend.) Tj
-T*
-(- sma_200 captures long trend \(strategic context\).) Tj
-T*
-(How to interpret \(simple\):) Tj
-T*
-(- Bullish structure often when sma_50 > sma_200.) Tj
-T*
-(- Weak structure often when sma_50 < sma_200.) Tj
-T*
-(Project behavior:) Tj
-T*
-(- Rows where sma_50 is null are dropped \(not enough history yet\).) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(6\) METRIC 3: volatility_7d) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Formula:) Tj
-T*
-(volatility_7d = standard deviation of last 7 closes) Tj
-T*
-(Code equivalent:) Tj
-T*
-(F.stddev\('close'\).over\(window_7\)) Tj
-T*
-(Why we use it:) Tj
-T*
-(- Measures instability/risk in recent price behavior.) Tj
-T*
-(Worked intuition:) Tj
-T*
-(- Prices [100,101,100,101,100,101,100] => low volatility) Tj
-ET
-endstream
+<<
+/Count 1 /Kids [ 4 0 R ] /Type /Pages
+>>
 endobj
 8 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
-endobj
-9 0 obj
-<< /Length 2218 >>
+<<
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 2287
+>>
 stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(- Prices [95,105,96,106,94,107,93] => high volatility) Tj
-T*
-(How to interpret:) Tj
-T*
-(- Higher value = bigger swings = harder prediction environment.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(7\) METRIC 4: ema_20 \(implementation note\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(What code does now:) Tj
-T*
-(ema_20 is set to 20-day simple average \(SMA_20\) in current code.) Tj
-T*
-(Why still useful:) Tj
-T*
-(- It still gives a 20-day smoothed trend line.) Tj
-T*
-(- Works well as a practical trend feature for model and dashboard.) Tj
-T*
-(Note for advanced users:) Tj
-T*
-(- Classic EMA gives more weight to recent prices.) Tj
-T*
-(- We can upgrade this in future versions.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(8\) METRIC 5: MACD and MACD Signal) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Project formulas:) Tj
-T*
-(macd\(t\) = SMA_12\(t\) - SMA_26\(t\)) Tj
-T*
-(macd_signal\(t\) = SMA_9\(macd\)) Tj
-T*
-(Why we use them:) Tj
-T*
-(- Momentum and trend acceleration indicator.) Tj
-T*
-(Simple worked example:) Tj
-T*
-(If SMA_12 = 108 and SMA_26 = 103, macd = +5) Tj
-T*
-(Positive MACD means short window is above medium window.) Tj
-T*
-(If MACD crosses above macd_signal, momentum is improving.) Tj
-T*
-(Interpretation tip:) Tj
-T*
-(- Sign \(+/-\) tells direction bias.) Tj
-T*
-(- Distance from signal line suggests strength of momentum change.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(9\) METRIC 6: Bollinger Bands \(bb_upper, bb_lower\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Formulas:) Tj
-T*
-(bb_upper = SMA_20 + 2 * SD_20) Tj
-T*
-(bb_lower = SMA_20 - 2 * SD_20) Tj
-T*
-(Why we use them:) Tj
-T*
-(- Dynamic range based on current volatility.) Tj
-T*
-(- Detects potentially stretched moves.) Tj
-T*
-(Worked example:) Tj
-T*
-(If SMA_20 = 100 and SD_20 = 4:) Tj
-T*
-(bb_upper = 100 + 2*4 = 108) Tj
-T*
-(bb_lower = 100 - 2*4 = 92) Tj
-T*
-(If close is 109, price is above upper band \(overextended zone\).) Tj
-T*
-(If close is 91, price is below lower band \(oversold zone\).) Tj
-T*
-ET
-endstream
-endobj
-10 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
-endobj
-11 0 obj
-<< /Length 2103 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(------------------------------------------------------------) Tj
-T*
-(10\) METRIC 7: RSI \(rsi_14\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Steps used in code:) Tj
-T*
-(1. delta_t = C_t - C_\(t-1\)) Tj
-T*
-(2. gain_t = max\(delta_t, 0\)) Tj
-T*
-(3. loss_t = max\(-delta_t, 0\)) Tj
-T*
-(4. avg_gain_14 = average of gains over 14 days) Tj
-T*
-(5. avg_loss_14 = average of losses over 14 days) Tj
-T*
-(6. RS = avg_gain_14 / avg_loss_14) Tj
-T*
-(7. RSI = 100 - \(100 / \(1 + RS\)\)) Tj
-T*
-(Why we use RSI:) Tj
-T*
-(- Standard momentum oscillator with easy interpretation.) Tj
-T*
-(- Useful for identifying overbought/oversold conditions.) Tj
-T*
-(Simple worked example:) Tj
-T*
-(Suppose avg_gain_14 = 1.2 and avg_loss_14 = 0.6) Tj
-T*
-(RS = 1.2 / 0.6 = 2) Tj
-T*
-(RSI = 100 - 100/\(1+2\) = 100 - 33.33 = 66.67) Tj
-T*
-(Interpretation:) Tj
-T*
-(- RSI around 67 means strong momentum, not yet extreme overbought.) Tj
-T*
-(Typical ranges:) Tj
-T*
-(- >70 often called overbought) Tj
-T*
-(- <30 often called oversold) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(11\) METRIC 8: ATR \(atr_14\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(True Range per day:) Tj
-T*
-(TR1 = H_t - L_t) Tj
-T*
-(TR2 = abs\(H_t - PrevClose_t\)) Tj
-T*
-(TR3 = abs\(L_t - PrevClose_t\)) Tj
-T*
-(TR  = max\(TR1, TR2, TR3\)) Tj
-T*
-(ATR formula:) Tj
-T*
-(atr_14 = average\(TR over last 14 days\)) Tj
-T*
-(Why we use ATR:) Tj
-T*
-(- Captures intraday range and gap risk.) Tj
-T*
-(- Better risk gauge than close-only volatility in many markets.) Tj
-T*
-(Worked example:) Tj
-T*
-(If H=110, L=104, PrevClose=107:) Tj
-T*
-(TR1=6, TR2=3, TR3=3, so TR=6) Tj
-T*
-(If average TR over 14 days is 5.2, then ATR=5.2) Tj
-T*
-(Interpretation:) Tj
-T*
-(- Higher ATR means wider typical movement and higher position risk.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(12\) METRIC 9: Stochastic Oscillator \(stoch_k, stoch_d\)) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Formulas:) Tj
-ET
-endstream
-endobj
-12 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
-endobj
-13 0 obj
-<< /Length 2499 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-(lowest_low_14  = min\(low over last 14 days\)) Tj
-T*
-(highest_high_14 = max\(high over last 14 days\)) Tj
-T*
-(stoch_k = \(\(Close - lowest_low_14\) / \(highest_high_14 - lowest_low_14\)\) * 100) Tj
-T*
-(stoch_d = 3-day average of stoch_k) Tj
-T*
-(Why we use it:) Tj
-T*
-(- Shows where close sits inside recent high-low range.) Tj
-T*
-(Worked example:) Tj
-T*
-(If Close=107, lowest_low_14=95, highest_high_14=110:) Tj
-T*
-(stoch_k = \(\(107-95\)/\(110-95\)\)*100 = \(12/15\)*100 = 80) Tj
-T*
-(If last 3 stoch_k values are 70, 80, 75 => stoch_d = 75) Tj
-T*
-(Interpretation:) Tj
-T*
-(- High values \(near 100\): close near range high.) Tj
-T*
-(- Low values \(near 0\): close near range low.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(13\) HOW ALL METRICS WORK TOGETHER) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(No single metric is enough. We combine them to reduce false signals.) Tj
-T*
-(Example combined read:) Tj
-T*
-(- Trend strong: close > sma_50 > sma_200) Tj
-T*
-(- Momentum strong: macd > macd_signal and RSI in healthy range) Tj
-T*
-(- Risk acceptable: volatility_7d and ATR not extreme) Tj
-T*
-(This combination usually gives better confidence than any single indicator.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(14\) HOW THIS CONNECTS TO PRODUCT SIGNALS) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(These silver metrics are fed into ML models \(1y and 5y horizons\).) Tj
-T*
-(The model returns probabilities \(confidence\).) Tj
-T*
-(Strategy thresholds convert probabilities to labels such as:) Tj
-T*
-(INVEST NOW, ACCUMULATE, MONITOR, WAIT, AVOID, STRONG HOLD.) Tj
-T*
-T*
-(So silver layer = the mathematical foundation behind all downstream outputs:) Tj
-T*
-(- dashboard insights) Tj
-T*
-(- API responses) Tj
-T*
-(- email reports) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(15\) COMMON BEGINNER QUESTIONS) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Q1: Why not use only price?) Tj
-T*
-(A: Price alone does not separate trend, momentum, and risk. Multiple views are safer.) Tj
-T*
-T*
-(Q2: Are these formulas guaranteed to predict returns?) Tj
-T*
-(A: No. They improve decision context but cannot remove market uncertainty.) Tj
-T*
-T*
-(Q3: Why does model still make mistakes?) Tj
-T*
-(A: Markets change regimes, data has noise, and indicators are probabilistic signals.) Tj
-ET
-endstream
-endobj
-14 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
-endobj
-15 0 obj
-<< /Length 1233 >>
-stream
-BT
-/F1 10 Tf
-14 TL
-42 760 Td
-T*
-(Q4: Why use 50/200 day windows?) Tj
-T*
-(A: They are widely used long enough windows that capture medium and long trend.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(16\) IMPLEMENTATION TRANSPARENCY NOTES) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Current code approximations:) Tj
-T*
-(- ema_20 uses SMA_20) Tj
-T*
-(- macd uses SMA\(12\)-SMA\(26\)) Tj
-T*
-(These are valid practical features, but not textbook EMA versions.) Tj
-T*
-(A future enhancement can add exact EMA formulas.) Tj
-T*
-T*
-(------------------------------------------------------------) Tj
-T*
-(17\) FINAL TAKEAWAY) Tj
-T*
-(------------------------------------------------------------) Tj
-T*
-(Silver layer metrics convert raw market data into understandable signals.) Tj
-T*
-(Think of them as a dashboard of financial health:) Tj
-T*
-(- Trend gauges) Tj
-T*
-(- Momentum gauges) Tj
-T*
-(- Risk gauges) Tj
-T*
-(Together they power model confidence and product-level recommendations.) Tj
-T*
-T*
-(Appendix: Features used by model) Tj
-T*
-(rsi_14, volatility_7d, macd, macd_signal, ema_20, moving_avg_7d,) Tj
-T*
-(bb_upper, bb_lower, sma_50, sma_200, atr_14, stoch_k, stoch_d) Tj
-ET
-endstream
+Gatm<gN)%,&:O:Sm%`oL1]ZCgEG#p):>@n$`_r]F<C_[4OMmS(Q%YsC:&hm7nEu1.)CM+Q";ctZ37qLf5_7i8e^%A$n7E(F[hL6CnH,Y#=>7IES+4Um-O-hLC:[eL7W$0NK/(u`.AY.N(mR6V%F=W/Y^P86Y3ga2+;M+?42Kl@pX=aNnFbGPn;=L@1G)ug*/G=3N?]:!JoE5<p`O)cbVFFP$0L4]`dbf!9PGQ`<(t5/[X?!GCPl<LaQkq_\Da]G]6Gh])$t](M3gLZi![12Yt2D>F&ZPmOK]mLJ3'%@^-olRN3=1>)Pc&QDtqOu8fL"dV#]65q[k8/4'S:b;]kPApguRGiDLY-]O?YI[\/FfQC9DS]NVc&&r.t4G[:u-c_"r50B"gFGruaW?AEAtNHIHhg-eT@pc17]Y]FncXgjpKQ,5J).jPWljE6T\d3dr-3<ZVB">WO-F5ZR.G"MOdEq,PflVM+Do(E-*I+"b8A#=)eD$>obm<M6"-[etC7l>^I]6GC@\4ff1c1/UT^@$[4fENPhCp4oJ3!_!G(j/Zk6?f=k%+0#808Ap,f<aE2DkTTS2YLmRl6#`.R;Yt#p!@BSjcQaOjfkqnAQ`AMMfl7DfG<^Zj.J!=K8bG[g^YqH>-^5g3,$G3._jV/`:N&Jm]!mirAPr^R,T[7ebL[j&c6X=D]53_&_?/P`5qrWb]aL:*-M9g=&6'B`4VejbTAle*s,%tV\gjT[R%Qro'LJ_c?o'3=s%(_;[HM:#p)kHZS9M>oPZa3$q("M3UN5(4j7T)U_72f0O&*cP/nAIfrqM9%BiU_-6\^A(s&U"0NVGGSBo1Js.c\#\5-^!KJ^akFaDkOk"d]:a7?2CZ;&K0IX#^n$[a]rq@H_#ce-2g;$0"3:-8.Ij/,_6I%S@#K(i4qK1L+0^gr/ARj8D^F[Xpg^XdWch5o!qoW7!dYd;aP/L0-R$Gp=T8VX(;%t6D,K2<&^'p.@Nr$g;M=7S\kAk=t;=V=Bt=a&)HQ9fVfXS9u:fiu'N5Pl=J?bp8<LO=,gVS9)gp]ib6.s<Wb0_1+p01@bdK?2V8S>k0UJIjAB*d5BolO^^XgB51TM\n/Z$pi.jks8>h85pnEM6sVPd.hE(6<2<>NR7pVobmg=FC6j=c:S91q%Km_942V6KSf$/#h%oZ32[18LX@-MH=0aD.8`it:L%1_9<XN?&d+b0([;aQ0V_Z%ibGuq0\Q%Op^:lDW!&`'ZQKZV^!m5A.\6V4pn8LMeN(qi&cXs2]H?"&_jC,8FXjiO?h!a&Gb(Ai3.`C;:lY@4YD7MGEK@2bE>NXr])"rEZPEDj[jtW>m:SkR)e-NXn8JD/_/_uHnjD;p=cRX,7Y,]Fl1u5IA^#KWF\kXik-Rm-B`[Z12lFW?1"i(#Zemi:;gKBNf@]C$Wabr.s8R(JfKPmAYU"Bs<Vh5sAW)2Kgr$`;KA!K0$KS.gC/d!BOVX(VJ@%M(7`RubNe(.ih%6Pt-1Y5CW`b1_0Q)cP=c'BZD2PQ#M-+OWW`b0L)[<9Mpam2/%DlsjE,,`&$\;Rc0O+7qLAA:Nd^\HU^7cZKNLE&ndsUtV]P<]%O'MuJbPHAe[9rN(i_=ko`,3a>cM8.;Yfg3fgBE<k]uO7?G+N26S+Tt(Ao8/Z9)/o@ruCnjoq:SYWJ@5i[X,Hu)h94_m`(LL$/%1DPbZQ?4Ij?'c-s_-M>8a%:;6mkon!<Yi**tQU*r<N!mTk;l0V64,PbEko,KG0A#rl7_2@jdP7IjTf/fLS/#IE9cX=K7c^3n%Qgf]UA9juc<+g^%ei^ZU8/Mlh.t0nqJqkO5\#M9q_Pq7.H-%J>m@J*u/Gc!t(O/rB6k#\ihO.9b3B"Q\AnG3'bUmbq9**XL\\rh_XtDahBjW6iql;=hb^.+Eaq1d:\?%Ua/#&F^2gT9M^B^7$O"E%I6\Kn8,fF.:;]\\/O.hDX,BsB`&tVGe]nWElQH9+i2%)1=G.GjY$g-FsFNf(L3kb"P9EqgraS0GZ\cTQN=3MCq_1II$-U)l>%[ciC@(1a29oAqW$fhZ!G)>^1&oYW@:HFCVPSij[jT9qZfuj2mAU]92b(e#GSgNcj"28C[TA&?cjJMOnio3*BS=\R%h?l[L2VH%e<p;_-!Y9QR"raZJk3IntS3BW..P8mj/97=*7,QI['_(>ncO]60dg3iM1tGIuoct%iVjP8=-0A.2jl&[mN8f`C_6l<A.2SR=_'^CM!jhA*@SloIYgQ^0.3<(M<d3hfY0nNO-G_gka':H\0>gJZlE15p8$RETC2i_s5Z5CW~>endstream
 endobj
 xref
-0 16
+0 9
 0000000000 65535 f 
-0000000015 00000 n 
-0000000064 00000 n 
-0000000156 00000 n 
-0000000226 00000 n 
-0000000352 00000 n 
-0000002482 00000 n 
-0000002608 00000 n 
-0000004852 00000 n 
-0000004978 00000 n 
-0000007247 00000 n 
-0000007375 00000 n 
-0000009530 00000 n 
-0000009658 00000 n 
-0000012209 00000 n 
-0000012337 00000 n 
+0000000061 00000 n 
+0000000102 00000 n 
+0000000209 00000 n 
+0000000321 00000 n 
+0000000524 00000 n 
+0000000592 00000 n 
+0000000872 00000 n 
+0000000931 00000 n 
 trailer
-<< /Size 16 /Root 1 0 R >>
+<<
+/ID 
+[<23ba4707a03788bf0f22cb41a5aa1096><23ba4707a03788bf0f22cb41a5aa1096>]
+% ReportLab generated PDF document -- digest (opensource)
+
+/Info 6 0 R
+/Root 5 0 R
+/Size 9
+>>
 startxref
-13622
+3309
 %%EOF

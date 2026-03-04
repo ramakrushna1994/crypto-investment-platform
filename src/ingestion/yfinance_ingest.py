@@ -16,8 +16,9 @@ from src.config.settings import POSTGRES
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-import requests
 import io
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from airflow.exceptions import AirflowSkipException
 
 def get_nse_index_symbols(index_name):
     """
@@ -34,13 +35,22 @@ def get_nse_index_symbols(index_name):
         
     url = f"https://archives.nseindia.com/content/indices/{url_map[index_name]}"
     
-    try:
-        # NSE blocks requests without a User-Agent
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception_type(requests.exceptions.RequestException)
+    )
+    def fetch_nse():
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
+        return response.text
+
+    try:
+        # NSE blocks requests without a User-Agent
+        csv_text = fetch_nse()
         
-        df = pd.read_csv(io.StringIO(response.text))
+        df = pd.read_csv(io.StringIO(csv_text))
         # The column is usually 'Symbol', add .NS suffix for Yahoo Finance
         symbols = [f"{sym}.NS" for sym in df['Symbol'].tolist()]
         logger.info(f"Successfully fetched {len(symbols)} dynamic symbols for {index_name} from NSE.")

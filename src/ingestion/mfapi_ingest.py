@@ -11,6 +11,8 @@ import time
 from psycopg2.extras import execute_values
 from datetime import datetime
 from src.config.settings import POSTGRES
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from airflow.exceptions import AirflowSkipException
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
